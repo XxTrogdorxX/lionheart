@@ -33,6 +33,11 @@ input,select,textarea{font:inherit;font-size:16px;width:100%;min-width:0;padding
 label.f{display:block;font-size:13px;color:var(--mut)}
 .g{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px}
 .card.ss{border-left:4px solid var(--ac)}
+.nav{position:fixed;left:0;right:0;bottom:0;z-index:5;display:flex;gap:6px;padding:8px 12px calc(8px + env(safe-area-inset-bottom,0px));background:var(--card);border-top:1px solid var(--line)}
+.nav button{flex:1;max-width:200px;margin:0 auto}
+.nav button.sel{background:var(--ac);color:var(--on);border-color:var(--ac)}
+.rec{display:block;margin-bottom:8px}.rec .big{font-size:22px;font-weight:600;margin-top:2px}
+.seg{display:flex;gap:6px;margin:10px 0 4px}.seg button{flex:1;min-height:40px;padding:6px 4px;font-size:14px}.seg button.sel{background:var(--ac);color:var(--on);border-color:var(--ac)}
 button.day{width:100%;display:block;text-align:left;padding:14px}
 button.day.ok{background:var(--okbg);border-color:var(--ok)}
 :focus-visible{outline:2px solid var(--ac);outline-offset:2px}
@@ -49,6 +54,7 @@ const SB={url:"https://vcjzbisjjrhfgvnuvobm.supabase.co",key:"sb_publishable_RRm
 let last=null,dirty=false,tm,rt,sb=null,U=null,UE="",LK="lh1",pushing=false;
 function save(){
   if(V.auth!=="app")return;
+  regFor(S);
   if(JSON.stringify(S)!==last){S.u=Date.now();last=JSON.stringify(S);try{localStorage.setItem(LK,last)}catch(e){}dirty=true;clearTimeout(tm);tm=setTimeout(push,600)}
 }
 function fresh(){
@@ -59,12 +65,12 @@ function fresh(){
   return s;
 }
 try{const x=localStorage.getItem("lh1");S=x?JSON.parse(x):fresh()}catch(e){S=fresh()}
-const VER="2.0";
+const VER="2.2";
 function migrate(s){const v=s.v||1;
   if(s.p&&s.p.eq&&s.p.eq.Timed==null)s.p.eq.Timed=s.p.timeInc||15;
   if(!s.ds)s.ds={};
   if(v<3&&s.p)s.p.days.forEach((d,i)=>{for(let w=1;w<=s.week;w++){const ok=w<s.week||d.ex.every(e=>{const L=(s.logs[w]||{})[e.id];return L&&L.length>=e.ramp.length+e.sets&&L.every(x=>x.d)});if(ok&&d.ex.length)s.ds[w+":"+i]={done:1}}});
-  if(s.p){if(s.p.rir==null)s.p.rir=2;if(!s.p.plat)s.p.plat=3}s.v=4;return s}
+  if(s.p){if(s.p.rir==null)s.p.rir=2;if(!s.p.plat)s.p.plat=3}regFor(s);s.v=5;return s}
 S=migrate(S);last=null;
 const exs=()=>S.p.days.flatMap(d=>d.ex);
 if(!exs().length)V.view="setup";
@@ -99,9 +105,9 @@ function tgtTime(e,wk){
   return e.goal;
 }
 function gen(e,wk){
-  if(isT(e)){const t=tgtTime(e,wk);return Array.from({length:e.sets},()=>({pw:0,pr:t,d:0}))}
+  if(isT(e)){const t=tgtTime(e,wk);return Array.from({length:e.sets},()=>({pw:0,pr:t,d:0,rp:0}))}
   const W=work(e,wk);
-  const rr=reps(e,wk,W);return e.ramp.map(p=>({pw:h(W*p),pr:e.goal,d:0})).concat(Array.from({length:e.sets},()=>({pw:W,pr:rr,d:0})));
+  const rr=reps(e,wk,W);return e.ramp.map(p=>({pw:h(W*p),pr:e.goal,d:0,rp:1})).concat(Array.from({length:e.sets},()=>({pw:W,pr:rr,d:0,rp:0,tr:R()})));
 }
 function ens(wk,e){
   const lg=S.logs[wk]=S.logs[wk]||{};const L=lg[e.id]=lg[e.id]||[];
@@ -143,9 +149,9 @@ function train(){
   const cards=days.map((d,i)=>{const s=DS(i),L=d.ex.flatMap(e=>ens(S.week,e)),n=L.filter(x=>x.d).length;
     const st=s.done?"Completed"+(s.s&&s.e?" · "+mins(s)+" min":""):n?`In progress · ${n}/${L.length} sets`:"Not started";
     return `<button class="card day${s.done?" ok":""}" data-a="open" data-i="${i}"><div class="row sp"><h2>${esc(d.name)}</h2><span>${s.done?"✓":"›"}</span></div><div class="mut">${st} · ${d.ex.length} exercises</div></button>`}).join("");
-  return `<div class="row sp"><div><h1>Lionheart Lifting</h1><div class="mut">Week ${S.week} of ${S.p.weeks} · <span id="sy">${syncText()}</span></div></div><button data-a="setup">Setup</button></div>
-<div style="margin-top:12px">${cards||'<section class="card"><div class="mut">No days yet. Open Setup to add some.</div></section>'}</div>
-<button class="${all?"pri":""}" style="width:100%" data-a="next" ${last?"disabled":""}>${last?"Block complete":V.ask==="next"?(all?"":"Some days aren’t complete. ")+"Tap again to start week "+(S.week+1):all?"All days done · Start next week":"Start next week"}</button><div class="mut" style="margin-top:8px;text-align:center">${V.msg||(Object.keys(S.logs).length&&(!S.bk||Date.now()-S.bk>6048e5)?"Tip: it’s been a while since your last backup (Setup → Backup).":"")}</div>`;
+  return `<div class="row sp"><div><h1>Lionheart Lifting</h1><div class="mut">Week ${S.week} of ${S.p.weeks} · <span id="sy">${syncText()}</span></div></div></div>
+<div style="margin-top:12px">${cards||'<section class="card"><div class="mut">No days yet. Open Settings to add some.</div></section>'}</div>
+<button class="${all?"pri":""}" style="width:100%" data-a="next" ${last?"disabled":""}>${last?"Block complete":V.ask==="next"?(all?"":"Some days aren’t complete. ")+"Tap again to start week "+(S.week+1):all?"All days done · Start next week":"Start next week"}</button><div class="mut" style="margin-top:8px;text-align:center">${V.msg||(Object.keys(S.logs).length&&(!S.bk||Date.now()-S.bk>6048e5)?"Tip: it’s been a while since your last backup (Settings → Backup).":"")}</div>`;
 }
 const fmtT=ms=>{const t=Math.floor(ms/1e3),h=Math.floor(t/3600),m=Math.floor(t%3600/60),s=t%60;return(h?h+":"+String(m).padStart(2,"0"):m)+":"+String(s).padStart(2,"0")};
 function ssTag(ex,j){let a=j,b=j;while(a>0&&ex[a-1].ss)a--;while(b<ex.length-1&&ex[b].ss)b++;return a===b?"":"Superset "+(j-a+1)+" of "+(b-a+1)}
@@ -155,7 +161,7 @@ function dayPage(){
   const info=s.done?"Completed"+(s.s&&s.e?" · "+mins(s)+" min":""):s.s?"Started "+tm(s.s):"";
   return `<div class="row sp"><button data-a="home">‹ Week ${S.week}</button><div class="mut" style="text-align:right">${info}<br><span id="sy">${syncText()}</span><br><b id="el">${s.s&&!s.done?fmtT(Date.now()-s.s):""}</b></div></div><h1 style="margin-top:8px">${esc(d.name)}</h1>
 ${!s.s&&!s.done?'<button class="pri" style="width:100%;margin-bottom:12px" data-a="start">Start workout</button>':""}
-${d.ex.length?d.ex.map((e,j)=>exCard(e,ssTag(d.ex,j))).join(""):'<section class="card"><div class="mut">No exercises yet. Add some in Setup.</div></section>'}
+${d.ex.length?d.ex.map((e,j)=>exCard(e,ssTag(d.ex,j))).join(""):'<section class="card"><div class="mut">No exercises yet. Add some in Settings.</div></section>'}
 ${s.done?'<button style="width:100%" data-a="reopen">Reopen day</button>':'<button class="pri" style="width:100%" data-a="fin">Complete day</button>'}`;
 }
 function setup(){
@@ -163,21 +169,135 @@ function setup(){
   const tabs=exs().length?"":`<div class="tabs"><button class="${V.tab==="restore"?"":"sel"}" data-a="tab" data-t="new">Start from scratch</button><button class="${V.tab==="restore"?"sel":""}" data-a="tab" data-t="restore">Restore from backup</button></div>`;
   if(!exs().length&&V.tab==="restore")return `<h1>Welcome</h1>${tabs}<section class="card"><h2>Restore from backup</h2><div class="mut">Paste the backup text you saved from another phone or an earlier session, then tap Restore.</div><textarea id="bk" rows="6" style="margin-top:8px"></textarea><button class="pri" style="width:100%;margin-top:8px" data-a="imp">Restore from text</button><div class="mut" id="bm"></div></section>`;
   const f=(lab,path,val,n)=>`<label class="f">${lab}<input data-p="${path}" ${n?'data-n="1" inputmode="decimal"':""} value="${esc(val)}"></label>`;
-  return `<div class="row sp"><h1>Setup</h1><button class="pri" data-a="back">Done</button></div>
-${tabs}${exs().length?"":`<div class="mut" style="margin-bottom:10px">Add your days and exercises below, then tap Done. Set Current week to where you are in your block.</div>`}
-<section class="card"><h2>Block</h2><div class="g">${f("Weeks in block","weeks",p.weeks,1)}${f("Goal RIR","rir",R(),1)}${f("Plateau weeks","plat",p.plat||3,1)}</div>
-<div style="margin-top:8px" class="mut">Current week: <input style="width:70px;display:inline" data-p="__week" data-n="1" inputmode="numeric" value="${S.week}"></div></section>
-<section class="card"><h2>Equipment increments</h2><div class="mut">Weights in lb. Timed is in seconds.</div>${eqs.map(q=>`<div class="g" style="grid-template-columns:1fr 90px 44px"><input data-q="${esc(q)}" data-a2="eqn" value="${esc(q)}" ${q==="Timed"?"disabled":""}><input data-q="${esc(q)}" data-a2="eqv" inputmode="decimal" value="${p.eq[q]}"><button data-a="deq" data-q="${esc(q)}" ${q==="Timed"?"disabled":""}>✕</button></div>`).join("")}<button style="margin-top:8px" data-a="aeq">Add equipment</button></section>
-${p.days.map((d,di)=>`<section class="card"><div class="row sp">${f("Day name",`days.${di}.name`,d.name)}<button data-a="dday" data-i="${di}">${V.ask==="d"+di?"Tap again to remove":"Remove day"}</button></div>
+  const st=V.st||(exs().length?"eq":"plan");
+  const stabs=exs().length?`<div class="tabs"><button class="${st==="eq"?"sel":""}" data-a="st" data-t="eq">Equipment</button><button class="${st==="plan"?"sel":""}" data-a="st" data-t="plan">Plan</button><button class="${st==="bk"?"sel":""}" data-a="st" data-t="bk">Backup</button><button class="${st==="wipe"?"sel":""}" data-a="st" data-t="wipe">Erase</button></div>`:"";
+  const head=exs().length?`<div class="row sp"><button data-a="prof">‹ Profile</button></div><h1 style="margin-top:8px">Settings</h1>`:`<div class="row sp"><h1>Settings</h1><button class="pri" data-a="back">Done</button></div>`;
+  const hint=exs().length?"":`<div class="mut" style="margin-bottom:10px">Add your days and exercises below, then tap Done. Set Current week to where you are in your block.</div>`;
+  const eqc=`<section class="card"><h2>Equipment increments</h2><div class="mut">Weights in lb. Timed is in seconds.</div>${eqs.map(q=>`<div class="g" style="grid-template-columns:1fr 90px 44px"><input data-q="${esc(q)}" data-a2="eqn" value="${esc(q)}" ${q==="Timed"?"disabled":""}><input data-q="${esc(q)}" data-a2="eqv" inputmode="decimal" value="${p.eq[q]}"><button data-a="deq" data-q="${esc(q)}" ${q==="Timed"?"disabled":""}>✕</button></div>`).join("")}<button style="margin-top:8px" data-a="aeq">Add equipment</button></section>`;
+  const blk=`<section class="card"><h2>Block</h2><div class="g">${f("Weeks in block","weeks",p.weeks,1)}${f("Goal RIR","rir",R(),1)}${f("Plateau weeks","plat",p.plat||3,1)}</div>
+<div style="margin-top:8px" class="mut">Current week: <input style="width:70px;display:inline" data-p="__week" data-n="1" inputmode="numeric" value="${S.week}"></div></section>`;
+  const plan=blk+p.days.map((d,di)=>`<section class="card"><div class="row sp">${f("Day name",`days.${di}.name`,d.name)}<button data-a="dday" data-i="${di}">${V.ask==="d"+di?"Tap again to remove":"Remove day"}</button></div>
 ${d.ex.map((e,ei)=>{const b=`days.${di}.ex.${ei}.`;return `<div class="card" style="background:var(--bg)">${f("Exercise",b+"name",e.name)}<div class="g"><label class="f">Equipment<select data-p="${b}eq">${eqs.map(q=>`<option ${q==e.eq?"selected":""}>${esc(q)}</option>`).join("")}</select></label>
 ${f("Sets",b+"sets",e.sets,1)}${f("Start weight",b+"start",e.start,1)}${f(isT(e)?"Goal (sec)":"Goal reps",b+"goal",e.goal,1)}</div>
 ${isT(e)?"":`<label class="f" style="margin-top:8px">Ramp % (blank = none, e.g. 50, 80)<input data-p="${b}ramp" data-r="1" value="${e.ramp.map(x=>Math.round(x*100)).join(", ")}"></label>`}
-${ei<d.ex.length-1?`<label class="f" style="display:flex;gap:8px;align-items:center;margin-top:8px"><input type="checkbox" style="width:auto" data-p="${b}ss" data-c="1" ${e.ss?"checked":""}>Superset with next exercise</label>`:""}<div class="row" style="margin-top:8px"><button data-a="mv" data-d="${di}" data-i="${ei}" data-dir="-1">↑</button><button data-a="mv" data-d="${di}" data-i="${ei}" data-dir="1">↓</button><button data-a="dex" data-d="${di}" data-i="${ei}">Remove exercise</button></div></div>`}).join("")}<button data-a="aex" data-i="${di}">Add exercise</button></section>`).join("")}
-<button style="width:100%;margin-bottom:12px" data-a="aday">Add day</button>
-${acct()}<section class="card"><h2>Backup</h2><div class="mut">Optional. Copy the text and keep it in Notes. Paste it back to restore.</div><div class="mut">Last backup: ${S.bk?new Date(S.bk).toLocaleDateString():"never"} · App v${VER}</div><textarea id="bk" rows="4"></textarea><div class="row" style="margin-top:8px"><button data-a="exp">Copy backup</button><button data-a="imp">Restore from text</button></div><div class="mut" id="bm"></div></section>
-<section class="card"><h2>Erase all data</h2><div class="mut">Removes your program and logs, including the copy in your account. Copy your backup first.</div><button style="margin-top:8px" data-a="wipe">${V.ask==="wipe"?"Tap again to erase everything":"Erase all data"}</button></section>`;
+${ei<d.ex.length-1?`<label class="f" style="display:flex;gap:8px;align-items:center;margin-top:8px"><input type="checkbox" style="width:auto" data-p="${b}ss" data-c="1" ${e.ss?"checked":""}>Superset with next exercise</label>`:""}<div class="row" style="margin-top:8px"><button data-a="mv" data-d="${di}" data-i="${ei}" data-dir="-1">↑</button><button data-a="mv" data-d="${di}" data-i="${ei}" data-dir="1">↓</button><button data-a="dex" data-d="${di}" data-i="${ei}">Remove exercise</button></div></div>`}).join("")}<button data-a="aex" data-i="${di}">Add exercise</button></section>`).join("")+`<button style="width:100%;margin-bottom:12px" data-a="aday">Add day</button>`;
+  const bkc=`<section class="card"><h2>Backup</h2><div class="mut">Optional. Copy the text and keep it in Notes. Paste it back to restore.</div><div class="mut">Last backup: ${S.bk?new Date(S.bk).toLocaleDateString():"never"} · App v${VER}</div><textarea id="bk" rows="4"></textarea><div class="row" style="margin-top:8px"><button data-a="exp">Copy backup</button><button data-a="imp">Restore from text</button></div><div class="mut" id="bm"></div></section>`;
+  const wp=`<section class="card"><h2>Erase all data</h2><div class="mut">Removes your program and logs, including the copy in your account. Copy your backup first.</div><button style="margin-top:8px" data-a="wipe">${V.ask==="wipe"?"Tap again to erase everything":"Erase all data"}</button></section>`;
+  const body=!exs().length?eqc+plan:st==="eq"?eqc:st==="plan"?plan:st==="bk"?bkc:wp;
+  return head+stabs+tabs+hint+body;
 }
-function render(){if(V.auth!=="app"){$("#app").innerHTML=authScreen();return}if(V.view==="day"&&!S.p.days[V.di])V.view="train";$("#app").innerHTML=V.view==="train"?train():V.view==="day"?dayPage():setup();save()}
+function profPage(){
+  let wk=0,wo=0,vol=0;
+  Object.keys(S.logs).forEach(w=>{if(Object.values(S.logs[w]||{}).some(L=>L.some(s=>s.d)))wk++});
+  Object.values(S.ds||{}).forEach(d=>{if(d.done)wo++});
+  Object.values(movs()).forEach(m=>{if(!m.t)msets(m).forEach(s=>{vol+=s.w*s.r})});
+  const stat=(l,v)=>`<div class="card rec"><div class="mut">${l}</div><div class="big">${v}</div></div>`;
+  const a=acct()||`<section class="card"><h2>Account</h2><div class="mut">Not signed in. Your data is saved on this phone only.</div></section>`;
+  return `<h1>Profile</h1>${a}
+<section class="card"><h2>Quick stats</h2><div class="g" style="grid-template-columns:1fr 1fr 1fr">${stat("Weeks trained",wk)}${stat("Workouts",wo)}${stat("Total volume (lb)",n0(vol))}</div></section>
+<button class="card day" data-a="hnav"><div class="row sp"><h2>History</h2><span>›</span></div></button>
+<button class="card day" data-a="setup"><div class="row sp"><h2>Settings</h2><span>›</span></div></button>`;
+}
+const kn=n=>String(n).trim().toLowerCase();
+function regFor(s){if(!s.p)return;const x=s.xs=s.xs||{};s.p.days.forEach(d=>d.ex.forEach(e=>{const n=String(e.name).trim(),tm=e.eq==="Timed"?1:0,r=e.ramp.length,o=x[e.id];if(!o||o.n!==n||o.t!==tm||o.r!==r)x[e.id]={n,t:tm,r}}))}
+function movs(){const m={};for(const id in (S.xs||{})){const x=S.xs[id],k=kn(x.n);(m[k]=m[k]||{k,name:String(x.n).trim(),t:x.t,ids:[]}).ids.push(id)}return m}
+function msets(mv,skip){
+  const out=[];
+  Object.keys(S.logs).map(Number).sort((a,b)=>a-b).forEach(wk=>{
+    mv.ids.forEach(id=>{
+      if(skip&&skip.wk===wk&&skip.ids.includes(id))return;
+      const L=(S.logs[wk]||{})[id];if(!L)return;const x=(S.xs||{})[id]||{};
+      L.forEach((s,i)=>{
+        if(!s.d)return;
+        const ramp=s.rp===1||(s.rp===undefined&&i<(x.r||0));
+        if(mv.t){if(!(s.r>0))return}else if(ramp||!(s.w>0)||!(s.r>0))return;
+        out.push({wk,w:+s.w||0,r:+s.r,t:s.t||null});
+      });
+    });
+  });
+  return out;
+}
+const MET={e1rm:s=>s.r<=10?s.w*(1+s.r/30):null,wt:s=>s.w,vol:s=>s.w*s.r,sec:s=>s.r};
+function best(sets,f){let b=null;for(const s of sets){const v=f(s);if(v==null)continue;if(!b||v>b.v+1e-9)b={v,s}}return b}
+const dstr=ms=>new Date(ms).toLocaleDateString(undefined,{month:"short",day:"numeric"});
+const whenTxt=s=>"Week "+s.wk+(s.t?" · "+dstr(s.t):"");
+const n0=v=>Math.round(v).toLocaleString();
+function mkSummary(di){
+  const d=S.p.days[di],s=DS(di);
+  let done=0,planned=0,vol=0;
+  d.ex.forEach(e=>{ens(S.week,e).forEach((x,i)=>{const ramp=!isT(e)&&(x.rp===1||(x.rp===undefined&&i<e.ramp.length));if(ramp)return;planned++;if(x.d){done++;if(!isT(e)&&x.w>0&&x.r>0)vol+=x.w*x.r}})});
+  const M=movs(),seen={},recs=[];
+  d.ex.forEach(e=>{
+    const k=kn(e.name);if(seen[k])return;seen[k]=1;const mv=M[k];if(!mv)return;
+    const before=msets(mv,{wk:S.week,ids:d.ex.filter(x=>kn(x.name)===k).map(x=>x.id)}),all=msets(mv);
+    if(!before.length)return;
+    if(mv.t){const a=best(before,MET.sec),b=best(all,MET.sec);if(a&&b&&b.v>a.v+1e-9)recs.push({name:mv.name,label:"Longest hold",val:b.v+" sec",prev:a.v+" sec"})}
+    else[["e1rm","Est. 1RM"],["wt","Heaviest weight"],["vol","Best set volume"]].forEach(([m,l])=>{const a=best(before,MET[m]),b=best(all,MET[m]);if(a&&b&&b.v>a.v+1e-9)recs.push({name:mv.name,label:l,val:fmt(b.v)+" lb",prev:fmt(a.v)+" lb"})});
+  });
+  return{name:d.name,mins:s.s&&s.e?Math.max(1,Math.round((s.e-s.s)/6e4)):null,done,planned,vol,recs};
+}
+function sumPage(){
+  const s=V.sum;if(!s){V.view="train";return train()}
+  return `<h1>${esc(s.name)} complete</h1>
+<div class="g" style="grid-template-columns:1fr 1fr 1fr"><div class="card"><div class="mut">Time</div><h2>${s.mins?s.mins+" min":"—"}</h2></div><div class="card"><div class="mut">Sets</div><h2>${s.done}/${s.planned}</h2></div><div class="card"><div class="mut">Volume</div><h2>${n0(s.vol)} lb</h2></div></div>
+<section class="card" style="margin-top:12px"><h2>New records</h2>${s.recs.length?s.recs.map(r=>`<div style="margin-top:8px"><b>${esc(r.name)}</b><div class="mut">${r.label}: ${r.val} (was ${r.prev})</div></div>`).join(""):'<div class="mut" style="margin-top:6px">No new records this time.</div>'}</section>
+<button class="pri" style="width:100%" data-a="sumdone">Done</button>`;
+}
+function histPage(){
+  const rows=Object.values(movs()).filter(v=>msets(v).length).sort((a,b)=>a.name.localeCompare(b.name));
+  return `<div class="row sp"><button data-a="prof">‹ Profile</button></div><h1 style="margin-top:8px">History</h1><div class="mut" style="margin-bottom:10px">Movements you've logged</div>`+(rows.length?rows.map(v=>`<button class="card day" data-a="hm" data-k="${esc(v.k)}"><div class="row sp"><h2>${esc(v.name)}</h2><span>›</span></div></button>`).join(""):`<section class="card"><div class="mut">Nothing logged yet. Check off a set on the Train tab and the movement will show up here.</div></section>`);
+}
+function gpts(sets,metric){
+  const f=MET[metric],byWk={},wkT={};
+  sets.forEach(s=>{if(s.t&&(!wkT[s.wk]||s.t>wkT[s.wk]))wkT[s.wk]=s.t;const v=f(s);if(v==null)return;const o=byWk[s.wk]=byWk[s.wk]||{wk:s.wk,y:v};if(v>o.y)o.y=v});
+  const dm=Object.keys(wkT).length>=4;
+  let pts=Object.values(byWk).sort((a,b)=>a.wk-b.wk),est=false;
+  if(dm){const aw=Math.min(...Object.keys(wkT).map(Number)),ad=wkT[aw];pts.forEach(p=>{if(wkT[p.wk])p.x=wkT[p.wk];else{p.x=ad+(p.wk-aw)*6048e5;est=true}})}
+  else pts.forEach(p=>{p.x=p.wk});
+  const N=V.gr==="4"?4:V.gr==="12"?12:0;
+  if(N&&pts.length){if(dm){const mx=Math.max(...pts.map(p=>p.x));pts=pts.filter(p=>p.x>=mx-N*6048e5)}else{const mx=Math.max(...pts.map(p=>p.wk));pts=pts.filter(p=>p.wk>mx-N)}}
+  return{pts,dm,est:est&&pts.some(p=>!wkT[p.wk])};
+}
+function chart(g,unit,name){
+  const pts=g.pts;if(!pts.length)return `<div class="mut">Nothing in this range yet.</div>`;
+  const W=320,H=190,L=46,Rr=14,T=14,B=28,xs=pts.map(p=>p.x),x0=Math.min(...xs),x1=Math.max(...xs),ys=pts.map(p=>p.y);
+  let y0=Math.min(...ys),y1=Math.max(...ys);const pad=(y1-y0)*.15||Math.max(1,y1*.05);y0=Math.max(0,y0-pad);y1+=pad;
+  const X=v=>x1===x0?L+(W-L-Rr)/2:L+(v-x0)/(x1-x0)*(W-L-Rr),Y=v=>T+(1-(v-y0)/(y1-y0))*(H-T-B);
+  const sel=V.sel!=null&&pts[V.sel]?V.sel:pts.length-1;
+  const lab=p=>g.dm?dstr(p.x):"W"+p.wk;
+  const grid=[0,.5,1].map(f=>{const v=y0+(y1-y0)*f,y=Y(v).toFixed(1);return `<line x1="${L}" x2="${W-Rr}" y1="${y}" y2="${y}" style="stroke:var(--line)" stroke-width="1"/><text x="${L-6}" y="${+y+4}" text-anchor="end" style="fill:var(--mut)" font-size="11">${Math.round(v)}</text>`}).join("");
+  const line=pts.length>1?`<polyline fill="none" style="stroke:var(--ac)" stroke-width="2" stroke-linejoin="round" stroke-linecap="round" points="${pts.map(p=>X(p.x).toFixed(1)+","+Y(p.y).toFixed(1)).join(" ")}"/>`:"";
+  const dots=pts.map((p,i)=>{const cx=X(p.x).toFixed(1),cy=Y(p.y).toFixed(1);return `<circle cx="${cx}" cy="${cy}" r="${i===sel?6:4}" style="fill:var(--ac);stroke:var(--card)" stroke-width="2"/><circle data-pt="${i}" cx="${cx}" cy="${cy}" r="16" fill="transparent"/>`}).join("");
+  const f=pts[0],l=pts[pts.length-1];
+  const xl=`<text x="${X(f.x).toFixed(1)}" y="${H-8}" text-anchor="${pts.length>1?"start":"middle"}" style="fill:var(--mut)" font-size="11">${lab(f)}</text>`+(pts.length>1?`<text x="${X(l.x).toFixed(1)}" y="${H-8}" text-anchor="end" style="fill:var(--mut)" font-size="11">${lab(l)}</text>`:"");
+  const sp=pts[sel];
+  return `<svg viewBox="0 0 ${W} ${H}" width="100%" role="img" aria-label="${esc(name)} progress, ${pts.length} points, latest ${fmt(l.y)} ${unit}">${grid}${line}${dots}${xl}</svg>
+<div style="margin-top:6px"><b>${lab(sp)}</b> · ${fmt(sp.y)} ${unit}</div>${g.est?'<div class="mut" style="font-size:12px;margin-top:4px">Weeks before dated history are placed by week number.</div>':""}`;
+}
+function movPage(){
+  const mv=movs()[V.mk];if(!mv){V.view="hist";return histPage()}
+  const sets=msets(mv),gm=mv.t?"sec":(V.gm||"e1rm");
+  const card=(l,b,det)=>`<div class="card rec"><div class="mut">${l}</div><div class="big">${b?det[0]:"—"}</div><div class="mut">${b?det[1]:"Not enough data yet"}</div></div>`;
+  let recs;
+  if(mv.t){const b=best(sets,MET.sec);recs=card("Longest hold",b,b&&[b.v+" sec",whenTxt(b.s)])}
+  else{const a=best(sets,MET.e1rm),w=best(sets,MET.wt),v=best(sets,MET.vol),st=b=>b.s.w+" lb × "+b.s.r+" · "+whenTxt(b.s);
+    recs=card("Heaviest weight",w,w&&[fmt(w.v)+" lb",st(w)])+card("Best estimated 1RM",a,a&&[fmt(a.v)+" lb",st(a)])+card("Best single-set volume",v,v&&[n0(v.v)+" lb",st(v)])}
+  const g=gpts(sets,gm),unit=gm==="sec"?"sec":"lb";
+  const seg=(items,cur,act)=>`<div class="seg">${items.map(x=>`<button class="${x[0]===cur?"sel":""}" data-a="${act}" data-m="${x[0]}">${x[1]}</button>`).join("")}</div>`;
+  return `<div class="row sp"><button data-a="hback">‹ History</button></div><h1 style="margin-top:8px">${esc(mv.name)}</h1>${recs}
+<section class="card"><h2>Progress</h2>${mv.t?"":seg([["e1rm","Est. 1RM"],["wt","Weight"],["vol","Volume"]],gm,"gm")}${seg([["4","4 wks"],["12","12 wks"],["all","All"]],V.gr||"all","gr")}${chart(g,unit,mv.name)}</section>`;
+}
+function navBar(){
+  const v=V.view,it=[["back","Train",v==="train"],["prof","Profile",v==="prof"||v==="hist"||v==="mov"||v==="setup"]];
+  return `<div style="height:84px"></div><nav class="nav">${it.map(x=>`<button class="${x[2]?"sel":""}" data-a="${x[0]}">${x[1]}</button>`).join("")}</nav>`;
+}
+function render(){
+  if(V.auth!=="app"){$("#app").innerHTML=authScreen();return}
+  if(V.view==="day"&&!S.p.days[V.di])V.view="train";
+  const v=V.view,body=v==="train"?train():v==="day"?dayPage():v==="prof"?profPage():v==="hist"?histPage():v==="mov"?movPage():v==="sum"?sumPage():setup();
+  $("#app").innerHTML=body+(V.view==="day"||V.view==="sum"?"":navBar());
+  save();
+}
 const setPath=(o,path,v)=>{const k=path.split(".");let c=o;for(let i=0;i<k.length-1;i++)c=c[k[i]];c[k[k.length-1]]=v};
 document.addEventListener("change",ev=>{
   const t=ev.target;
@@ -194,24 +314,33 @@ document.addEventListener("change",ev=>{
     render()}
 });
 document.addEventListener("click",ev=>{
+  {const c=ev.target.closest&&ev.target.closest("circle[data-pt]");if(c){V.sel=+c.dataset.pt;render();return}}
   const b=ev.target.closest("button[data-a]");if(!b)return;
   const a=b.dataset.a,i=+b.dataset.i;if(a!=="next"&&a!=="dday"&&a!=="wipe"&&a!=="so")V.ask=null;if(AUTH.includes(a)){authAct(a,b);return}
   if(a==="ck"){const row=b.closest(".set"),e=exs().find(x=>x.id===row.dataset.e),s=ens(S.week,e)[+row.dataset.i];
     row.querySelectorAll("input").forEach(n=>{if(n.value!=="")s[n.dataset.k]=+n.value});
     if(!s.d){if(isT(e)){if(s.r==null)s.r=s.pr}else{if(s.w==null)s.w=s.pw;if(s.r==null)s.r=s.pr}}
-    s.d=s.d?0:1;{const q=DS(V.di);if(s.d&&!q.s)q.s=Date.now()}render();return}
+    s.d=s.d?0:1;if(s.d)s.t=Date.now();else delete s.t;{const q=DS(V.di);if(s.d&&!q.s)q.s=Date.now()}render();return}
   if(a==="hist"){V.open[b.dataset.e]=!V.open[b.dataset.e]}
   else if(a==="day")S.day=i;
   else if(a==="next"){if(V.ask!=="next")V.ask="next";else{V.ask=null;S.week++;S.day=0;V.open={};scrollTo(0,0)}}
-  else if(a==="wipe"){if(V.ask!=="wipe")V.ask="wipe";else{V.ask=null;S=migrate(fresh());V.view="setup";V.tab="new";V.open={};scrollTo(0,0)}}
+  else if(a==="wipe"){if(V.ask!=="wipe")V.ask="wipe";else{V.ask=null;S=migrate(fresh());V.view="setup";V.st="plan";V.tab="new";V.open={};scrollTo(0,0)}}
   else if(a==="tab"){V.tab=b.dataset.t}
   else if(a==="open"){V.view="day";V.di=i;scrollTo(0,0)}
   else if(a==="home"){V.view="train";scrollTo(0,0)}
+  else if(a==="hnav"){V.view="hist";scrollTo(0,0)}
+  else if(a==="hm"){V.view="mov";V.mk=b.dataset.k;V.gm="e1rm";V.gr="all";V.sel=null;scrollTo(0,0)}
+  else if(a==="hback"){V.view="hist";scrollTo(0,0)}
+  else if(a==="gm"){V.gm=b.dataset.m;V.sel=null}
+  else if(a==="gr"){V.gr=b.dataset.m;V.sel=null}
+  else if(a==="sumdone"){V.view="train";V.sum=null;scrollTo(0,0)}
   else if(a==="mv"){const ar=S.p.days[+b.dataset.d].ex,k=i+ +b.dataset.dir;if(k>=0&&k<ar.length)[ar[i],ar[k]]=[ar[k],ar[i]]}
   else if(a==="start"){DS(V.di).s=Date.now()}
-  else if(a==="fin"){const q=DS(V.di);q.e=Date.now();q.done=1;V.view="train";scrollTo(0,0)}
+  else if(a==="fin"){const q=DS(V.di);q.e=Date.now();q.done=1;V.sum=mkSummary(V.di);V.view="sum";scrollTo(0,0)}
   else if(a==="reopen"){const q=DS(V.di);q.done=0;delete q.e}
-  else if(a==="setup"){V.view="setup";scrollTo(0,0)}
+  else if(a==="setup"){V.view="setup";V.st=null;scrollTo(0,0)}
+  else if(a==="prof"){V.view="prof";scrollTo(0,0)}
+  else if(a==="st"){V.st=b.dataset.t}
   else if(a==="back"){V.view="train";scrollTo(0,0)}
   else if(a==="aeq"){let n="New equipment",c=1;while(n in S.p.eq)n="New equipment "+(++c);S.p.eq[n]=5}
   else if(a==="deq"){if(!exs().some(e=>e.eq===b.dataset.q))delete S.p.eq[b.dataset.q];else alert("Some exercises use this equipment.")}
