@@ -32,21 +32,25 @@ input,select,textarea{font:inherit;font-size:16px;width:100%;min-width:0;padding
 .lnk{border:0;background:none;color:var(--ac);padding:4px 0;min-height:0;text-align:left;font-weight:600}
 label.f{display:block;font-size:13px;color:var(--mut)}
 .g{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px}
+.card.ss{border-left:4px solid var(--ac)}
 button.day{width:100%;display:block;text-align:left;padding:14px}
 button.day.ok{background:var(--okbg);border-color:var(--ok)}
 :focus-visible{outline:2px solid var(--ac);outline-offset:2px}
 </style></head><body><main id="app"></main>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
 const D={"prog":{"weeks":12,"timeInc":15,"eq":{"Dumbbell":10,"Barbell":5,"Machine":5,"Cable":10,"Body Weight":0},"days":[{"name":"Day 1","ex":[]}]},"imp":{}};
-let S,V={view:"train",open:{},msg:""};
+let S,V={view:"train",open:{},msg:"",auth:"app"};
 const $=s=>document.querySelector(s);
 const avg=a=>a.reduce((x,y)=>x+y,0)/a.length;
 const h=x=>Math.round(x*2)/2;
 const rnd=(x,i)=>i?Math.round(x/i)*i:x;
-let last=null,CL=null,dirty=false,tm;
-function push(){if(CL){try{CL.set({json:JSON.stringify(S)}).then(()=>{V.sync="cloud"}).catch(()=>{V.sync="local"})}catch(e){}}}
-function save(){const j=JSON.stringify(S);try{localStorage.setItem("lh1",j)}catch(e){}
-  if(j!==last){last=j;dirty=true;clearTimeout(tm);tm=setTimeout(push,500)}}
+const SB={url:"https://vcjzbisjjrhfgvnuvobm.supabase.co",key:"sb_publishable_RRmy1ukIPmWkddGAHsk8gw_ie-gbCiK"},SBON=!!(SB.url&&SB.key);
+let last=null,dirty=false,tm,rt,sb=null,U=null,UE="",LK="lh1",pushing=false;
+function save(){
+  if(V.auth!=="app")return;
+  if(JSON.stringify(S)!==last){S.u=Date.now();last=JSON.stringify(S);try{localStorage.setItem(LK,last)}catch(e){}dirty=true;clearTimeout(tm);tm=setTimeout(push,600)}
+}
 function fresh(){
   const s={p:JSON.parse(JSON.stringify(D.prog)),week:1,day:0,logs:{}};
   for(const id in D.imp)for(const wk in D.imp[id]){
@@ -55,20 +59,28 @@ function fresh(){
   return s;
 }
 try{const x=localStorage.getItem("lh1");S=x?JSON.parse(x):fresh()}catch(e){S=fresh()}
-const VER="1.6";
+const VER="2.0";
 function migrate(s){const v=s.v||1;
   if(s.p&&s.p.eq&&s.p.eq.Timed==null)s.p.eq.Timed=s.p.timeInc||15;
   if(!s.ds)s.ds={};
   if(v<3&&s.p)s.p.days.forEach((d,i)=>{for(let w=1;w<=s.week;w++){const ok=w<s.week||d.ex.every(e=>{const L=(s.logs[w]||{})[e.id];return L&&L.length>=e.ramp.length+e.sets&&L.every(x=>x.d)});if(ok&&d.ex.length)s.ds[w+":"+i]={done:1}}});
-  s.v=3;return s}
-S=migrate(S);last=JSON.stringify(S);
+  if(s.p){if(s.p.rir==null)s.p.rir=2;if(!s.p.plat)s.p.plat=3}s.v=4;return s}
+S=migrate(S);last=null;
 const exs=()=>S.p.days.flatMap(d=>d.ex);
 if(!exs().length)V.view="setup";
 const isT=e=>e.eq==="Timed";
 const inc=e=>S.p.eq[e.eq]||0;
+const R=()=>S.p.rir==null?2:S.p.rir;
+function reps(e,wk,W){
+  const G=e.goal,p=prev(e,wk),st=inc(e),N=S.p.plat||3;
+  if(!p||isT(e)||!st||!(W>0))return G;
+  for(let j=0;j<N;j++){const w=wsets(e,p.k-j);if(!w)return G;
+    if(!w.every(s=>s.r>=G)||avg(w.map(s=>s.i==null?R():s.i))>R()||Math.abs(avg(w.map(s=>s.w))-W)>=st/2)return G}
+  return Math.min(G+4,Math.max(G,Math.ceil(30*((W+st)/W*(1+(G+R())/30)-1)-R()-1e-9)));
+}
 function wsets(e,k){const L=S.logs[k]&&S.logs[k][e.id];if(!L)return;const w=L.filter((s,i)=>s.d&&i>=e.ramp.length&&s.w>0&&s.r>0);return w.length?w:null}
 function prev(e,wk){for(let k=wk-1;k>=1;k--){const w=wsets(e,k);if(w)return{w,k}}}
-function calc(e,w){const base=avg(w.map(s=>s.w)),est=avg(w.map(s=>s.w*(1+(s.r+(s.i==null?2:s.i))/30)/(1+(e.goal+2)/30)));return{base,est:rnd(Math.max(base*.9,Math.min(base*1.1,est)),inc(e))}}
+function calc(e,w){const base=avg(w.map(s=>s.w)),est=avg(w.map(s=>s.w*(1+(s.r+(s.i==null?R():s.i))/30)/(1+(e.goal+R())/30)));return{base,est:rnd(Math.max(base*.9,Math.min(base*1.1,est)),inc(e))}}
 const dn=c=>c.est<rnd(c.base,0)-1e-6;
 function work(e,wk){
   const p=prev(e,wk);if(!p)return e.start;
@@ -89,7 +101,7 @@ function tgtTime(e,wk){
 function gen(e,wk){
   if(isT(e)){const t=tgtTime(e,wk);return Array.from({length:e.sets},()=>({pw:0,pr:t,d:0}))}
   const W=work(e,wk);
-  return e.ramp.map(p=>({pw:h(W*p),pr:e.goal,d:0})).concat(Array.from({length:e.sets},()=>({pw:W,pr:e.goal,d:0})));
+  const rr=reps(e,wk,W);return e.ramp.map(p=>({pw:h(W*p),pr:e.goal,d:0})).concat(Array.from({length:e.sets},()=>({pw:W,pr:rr,d:0})));
 }
 function ens(wk,e){
   const lg=S.logs[wk]=S.logs[wk]||{};const L=lg[e.id]=lg[e.id]||[];
@@ -109,7 +121,7 @@ function hist(e){
   }
   return out.length?out.map(x=>`<div><span>Week ${x[0]}</span><span>${x[1]}</span></div>`).join(""):`<div class="mut">No past weeks logged yet.</div>`;
 }
-function exCard(e){
+function exCard(e,tag){
   const L=ens(S.week,e),t=isT(e),open=V.open[e.id];let n=0;
   const rows=L.map((s,i)=>{
     const ramp=i<e.ramp.length&&!t,lab=ramp?"Ramp":"Set "+(++n);
@@ -119,7 +131,7 @@ function exCard(e){
     return t?`<div class="set t${s.d?" on":""}" data-e="${e.id}" data-i="${i}"><span>${lab}<small>${tg}</small></span>${inp("r","numeric",v("r",s.pr),"sec")}<button data-a="ck" aria-label="Log set">✓</button></div>`
     :`<div class="set${s.d?" on":""}" data-e="${e.id}" data-i="${i}"><span>${lab}<small>${tg}</small></span>${inp("w","decimal",v("w",s.pw),"lb")}${inp("r","numeric",v("r",s.pr),"reps")}${inp("i","numeric",s.i,"RIR")}<button data-a="ck" aria-label="Log set">✓</button></div>`;
   }).join("");
-  return `<section class="card"><div class="row sp"><h2>${esc(e.name)}</h2><button class="lnk" data-a="hist" data-e="${e.id}">${open?"Hide":"History"}</button></div>
+  return `<section class="card${tag?" ss":""}">${tag?`<div class="mut" style="font-weight:600;color:var(--ac)">${tag}</div>`:""}<div class="row sp"><h2>${esc(e.name)}</h2><button class="lnk" data-a="hist" data-e="${e.id}">${open?"Hide":"History"}</button></div>
 <div class="mut">${e.sets} sets · goal ${t?e.goal+" sec":e.goal+" reps"}${e.ramp.length&&!t?" · ramp "+e.ramp.map(x=>Math.round(x*100)+"%").join(", "):""}</div>
 <div class="hd${t?" t":""}"><span></span>${t?"<span>seconds</span>":"<span>weight</span><span>reps</span><span>RIR</span>"}<span></span></div>${rows}
 ${open?`<div class="hist">${hist(e)}</div>`:""}</section>`;
@@ -131,16 +143,19 @@ function train(){
   const cards=days.map((d,i)=>{const s=DS(i),L=d.ex.flatMap(e=>ens(S.week,e)),n=L.filter(x=>x.d).length;
     const st=s.done?"Completed"+(s.s&&s.e?" · "+mins(s)+" min":""):n?`In progress · ${n}/${L.length} sets`:"Not started";
     return `<button class="card day${s.done?" ok":""}" data-a="open" data-i="${i}"><div class="row sp"><h2>${esc(d.name)}</h2><span>${s.done?"✓":"›"}</span></div><div class="mut">${st} · ${d.ex.length} exercises</div></button>`}).join("");
-  return `<div class="row sp"><div><h1>Lionheart Lifting</h1><div class="mut">Week ${S.week} of ${S.p.weeks} · ${V.sync==="cloud"?"saved to your account":"saved on this phone only"}</div></div><button data-a="setup">Setup</button></div>
+  return `<div class="row sp"><div><h1>Lionheart Lifting</h1><div class="mut">Week ${S.week} of ${S.p.weeks} · <span id="sy">${syncText()}</span></div></div><button data-a="setup">Setup</button></div>
 <div style="margin-top:12px">${cards||'<section class="card"><div class="mut">No days yet. Open Setup to add some.</div></section>'}</div>
 <button class="${all?"pri":""}" style="width:100%" data-a="next" ${last?"disabled":""}>${last?"Block complete":V.ask==="next"?(all?"":"Some days aren’t complete. ")+"Tap again to start week "+(S.week+1):all?"All days done · Start next week":"Start next week"}</button><div class="mut" style="margin-top:8px;text-align:center">${V.msg||(Object.keys(S.logs).length&&(!S.bk||Date.now()-S.bk>6048e5)?"Tip: it’s been a while since your last backup (Setup → Backup).":"")}</div>`;
 }
+const fmtT=ms=>{const t=Math.floor(ms/1e3),h=Math.floor(t/3600),m=Math.floor(t%3600/60),s=t%60;return(h?h+":"+String(m).padStart(2,"0"):m)+":"+String(s).padStart(2,"0")};
+function ssTag(ex,j){let a=j,b=j;while(a>0&&ex[a-1].ss)a--;while(b<ex.length-1&&ex[b].ss)b++;return a===b?"":"Superset "+(j-a+1)+" of "+(b-a+1)}
+setInterval(()=>{const x=document.getElementById("el");if(!x||V.view!=="day")return;const s=DS(V.di);x.textContent=s.s&&!s.done?fmtT(Date.now()-s.s):""},1000);
 function dayPage(){
   const i=V.di,d=S.p.days[i],s=DS(i),tm=x=>new Date(x).toLocaleTimeString([],{hour:"numeric",minute:"2-digit"});
   const info=s.done?"Completed"+(s.s&&s.e?" · "+mins(s)+" min":""):s.s?"Started "+tm(s.s):"";
-  return `<div class="row sp"><button data-a="home">‹ Week ${S.week}</button><div class="mut">${info}</div></div><h1 style="margin-top:8px">${esc(d.name)}</h1>
+  return `<div class="row sp"><button data-a="home">‹ Week ${S.week}</button><div class="mut" style="text-align:right">${info}<br><span id="sy">${syncText()}</span><br><b id="el">${s.s&&!s.done?fmtT(Date.now()-s.s):""}</b></div></div><h1 style="margin-top:8px">${esc(d.name)}</h1>
 ${!s.s&&!s.done?'<button class="pri" style="width:100%;margin-bottom:12px" data-a="start">Start workout</button>':""}
-${d.ex.length?d.ex.map(exCard).join(""):'<section class="card"><div class="mut">No exercises yet. Add some in Setup.</div></section>'}
+${d.ex.length?d.ex.map((e,j)=>exCard(e,ssTag(d.ex,j))).join(""):'<section class="card"><div class="mut">No exercises yet. Add some in Setup.</div></section>'}
 ${s.done?'<button style="width:100%" data-a="reopen">Reopen day</button>':'<button class="pri" style="width:100%" data-a="fin">Complete day</button>'}`;
 }
 function setup(){
@@ -150,18 +165,19 @@ function setup(){
   const f=(lab,path,val,n)=>`<label class="f">${lab}<input data-p="${path}" ${n?'data-n="1" inputmode="decimal"':""} value="${esc(val)}"></label>`;
   return `<div class="row sp"><h1>Setup</h1><button class="pri" data-a="back">Done</button></div>
 ${tabs}${exs().length?"":`<div class="mut" style="margin-bottom:10px">Add your days and exercises below, then tap Done. Set Current week to where you are in your block.</div>`}
-<section class="card"><h2>Block</h2><div class="g">${f("Weeks in block","weeks",p.weeks,1)}</div>
+<section class="card"><h2>Block</h2><div class="g">${f("Weeks in block","weeks",p.weeks,1)}${f("Goal RIR","rir",R(),1)}${f("Plateau weeks","plat",p.plat||3,1)}</div>
 <div style="margin-top:8px" class="mut">Current week: <input style="width:70px;display:inline" data-p="__week" data-n="1" inputmode="numeric" value="${S.week}"></div></section>
 <section class="card"><h2>Equipment increments</h2><div class="mut">Weights in lb. Timed is in seconds.</div>${eqs.map(q=>`<div class="g" style="grid-template-columns:1fr 90px 44px"><input data-q="${esc(q)}" data-a2="eqn" value="${esc(q)}" ${q==="Timed"?"disabled":""}><input data-q="${esc(q)}" data-a2="eqv" inputmode="decimal" value="${p.eq[q]}"><button data-a="deq" data-q="${esc(q)}" ${q==="Timed"?"disabled":""}>✕</button></div>`).join("")}<button style="margin-top:8px" data-a="aeq">Add equipment</button></section>
 ${p.days.map((d,di)=>`<section class="card"><div class="row sp">${f("Day name",`days.${di}.name`,d.name)}<button data-a="dday" data-i="${di}">${V.ask==="d"+di?"Tap again to remove":"Remove day"}</button></div>
 ${d.ex.map((e,ei)=>{const b=`days.${di}.ex.${ei}.`;return `<div class="card" style="background:var(--bg)">${f("Exercise",b+"name",e.name)}<div class="g"><label class="f">Equipment<select data-p="${b}eq">${eqs.map(q=>`<option ${q==e.eq?"selected":""}>${esc(q)}</option>`).join("")}</select></label>
 ${f("Sets",b+"sets",e.sets,1)}${f("Start weight",b+"start",e.start,1)}${f(isT(e)?"Goal (sec)":"Goal reps",b+"goal",e.goal,1)}</div>
 ${isT(e)?"":`<label class="f" style="margin-top:8px">Ramp % (blank = none, e.g. 50, 80)<input data-p="${b}ramp" data-r="1" value="${e.ramp.map(x=>Math.round(x*100)).join(", ")}"></label>`}
-<button style="margin-top:8px" data-a="dex" data-d="${di}" data-i="${ei}">Remove exercise</button></div>`}).join("")}<button data-a="aex" data-i="${di}">Add exercise</button></section>`).join("")}
+${ei<d.ex.length-1?`<label class="f" style="display:flex;gap:8px;align-items:center;margin-top:8px"><input type="checkbox" style="width:auto" data-p="${b}ss" data-c="1" ${e.ss?"checked":""}>Superset with next exercise</label>`:""}<div class="row" style="margin-top:8px"><button data-a="mv" data-d="${di}" data-i="${ei}" data-dir="-1">↑</button><button data-a="mv" data-d="${di}" data-i="${ei}" data-dir="1">↓</button><button data-a="dex" data-d="${di}" data-i="${ei}">Remove exercise</button></div></div>`}).join("")}<button data-a="aex" data-i="${di}">Add exercise</button></section>`).join("")}
 <button style="width:100%;margin-bottom:12px" data-a="aday">Add day</button>
-<section class="card"><h2>Backup</h2><div class="mut">Optional. Copy the text and keep it in Notes. Paste it back to restore.</div><div class="mut">Last backup: ${S.bk?new Date(S.bk).toLocaleDateString():"never"} · App v${VER}</div><textarea id="bk" rows="4"></textarea><div class="row" style="margin-top:8px"><button data-a="exp">Copy backup</button><button data-a="imp">Restore from text</button></div><div class="mut" id="bm"></div></section>`;
+${acct()}<section class="card"><h2>Backup</h2><div class="mut">Optional. Copy the text and keep it in Notes. Paste it back to restore.</div><div class="mut">Last backup: ${S.bk?new Date(S.bk).toLocaleDateString():"never"} · App v${VER}</div><textarea id="bk" rows="4"></textarea><div class="row" style="margin-top:8px"><button data-a="exp">Copy backup</button><button data-a="imp">Restore from text</button></div><div class="mut" id="bm"></div></section>
+<section class="card"><h2>Erase all data</h2><div class="mut">Removes your program and logs, including the copy in your account. Copy your backup first.</div><button style="margin-top:8px" data-a="wipe">${V.ask==="wipe"?"Tap again to erase everything":"Erase all data"}</button></section>`;
 }
-function render(){if(V.view==="day"&&!S.p.days[V.di])V.view="train";$("#app").innerHTML=V.view==="train"?train():V.view==="day"?dayPage():setup();save()}
+function render(){if(V.auth!=="app"){$("#app").innerHTML=authScreen();return}if(V.view==="day"&&!S.p.days[V.di])V.view="train";$("#app").innerHTML=V.view==="train"?train():V.view==="day"?dayPage():setup();save()}
 const setPath=(o,path,v)=>{const k=path.split(".");let c=o;for(let i=0;i<k.length-1;i++)c=c[k[i]];c[k[k.length-1]]=v};
 document.addEventListener("change",ev=>{
   const t=ev.target;
@@ -172,14 +188,14 @@ document.addEventListener("change",ev=>{
     else if(t.value&&t.value!==q&&!(t.value in eq)){const n={};for(const k in eq)n[k===q?t.value:k]=eq[k];S.p.eq=n;exs().forEach(e=>{if(e.eq===q)e.eq=t.value})}
     render();return}
   if(t.dataset.p){const p=t.dataset.p;let v=t.value;
-    if(t.dataset.r)v=v.split(/[ ,]+/).filter(Boolean).map(x=>+x/100).filter(x=>x>0);
+    if(t.dataset.c)v=t.checked?1:0;else if(t.dataset.r)v=v.split(/[ ,]+/).filter(Boolean).map(x=>+x/100).filter(x=>x>0);
     else if(t.dataset.n)v=+v||0;
     if(p==="__week")S.week=Math.max(1,Math.min(S.p.weeks,v||1));else setPath(S.p,p,v);
     render()}
 });
 document.addEventListener("click",ev=>{
   const b=ev.target.closest("button[data-a]");if(!b)return;
-  const a=b.dataset.a,i=+b.dataset.i;if(a!=="next"&&a!=="dday")V.ask=null;
+  const a=b.dataset.a,i=+b.dataset.i;if(a!=="next"&&a!=="dday"&&a!=="wipe"&&a!=="so")V.ask=null;if(AUTH.includes(a)){authAct(a,b);return}
   if(a==="ck"){const row=b.closest(".set"),e=exs().find(x=>x.id===row.dataset.e),s=ens(S.week,e)[+row.dataset.i];
     row.querySelectorAll("input").forEach(n=>{if(n.value!=="")s[n.dataset.k]=+n.value});
     if(!s.d){if(isT(e)){if(s.r==null)s.r=s.pr}else{if(s.w==null)s.w=s.pw;if(s.r==null)s.r=s.pr}}
@@ -187,11 +203,13 @@ document.addEventListener("click",ev=>{
   if(a==="hist"){V.open[b.dataset.e]=!V.open[b.dataset.e]}
   else if(a==="day")S.day=i;
   else if(a==="next"){if(V.ask!=="next")V.ask="next";else{V.ask=null;S.week++;S.day=0;V.open={};scrollTo(0,0)}}
+  else if(a==="wipe"){if(V.ask!=="wipe")V.ask="wipe";else{V.ask=null;S=migrate(fresh());V.view="setup";V.tab="new";V.open={};scrollTo(0,0)}}
   else if(a==="tab"){V.tab=b.dataset.t}
   else if(a==="open"){V.view="day";V.di=i;scrollTo(0,0)}
   else if(a==="home"){V.view="train";scrollTo(0,0)}
+  else if(a==="mv"){const ar=S.p.days[+b.dataset.d].ex,k=i+ +b.dataset.dir;if(k>=0&&k<ar.length)[ar[i],ar[k]]=[ar[k],ar[i]]}
   else if(a==="start"){DS(V.di).s=Date.now()}
-  else if(a==="fin"){const q=DS(V.di);q.e=Date.now();q.done=1}
+  else if(a==="fin"){const q=DS(V.di);q.e=Date.now();q.done=1;V.view="train";scrollTo(0,0)}
   else if(a==="reopen"){const q=DS(V.di);q.done=0;delete q.e}
   else if(a==="setup"){V.view="setup";scrollTo(0,0)}
   else if(a==="back"){V.view="train";scrollTo(0,0)}
@@ -205,15 +223,122 @@ document.addEventListener("click",ev=>{
   else if(a==="imp"){try{const o=JSON.parse($("#bk").value);if(!o.p||!o.logs)throw 0;S=migrate(o);V.view="train";V.msg="Restored."}catch(e){$("#bm").textContent="That text isn’t a valid backup.";return}}
   render();
 });
+const AUTH=["amode","forgot","retry","so"];
+const syncText=()=>!SBON?"saved on this phone only":V.sync==="cloud"?"saved to your account":V.sync==="offline"?"saved on this phone, will sync when online":"saving…";
+function syncUI(){const x=document.getElementById("sy");if(x)x.textContent=syncText()}
+const setMsg=m=>{V.amsg=m;const x=document.getElementById("amsg");if(x)x.textContent=m};
+const friendly=e=>{const m=String(e&&e.message||e);return/invalid login/i.test(m)?"Email or password is wrong.":/not confirmed/i.test(m)?"Confirm your email first (check your inbox), then sign in.":/already/i.test(m)?"That email already has an account. Try signing in.":/rate|limit|seconds/i.test(m)?"Too many attempts or emails. Wait a few minutes and try again.":m}
+function acct(){return SBON&&U?`<section class="card"><h2>Account</h2><div class="mut">Signed in as ${esc(UE)}</div><div class="mut">${syncText()}</div><button style="margin-top:8px" data-a="so">${V.ask==="so"?"Not synced yet. Tap again to sign out anyway":"Sign out"}</button></section>`:""}
+function authScreen(){
+  if(V.auth==="loading")return `<h1>Lionheart Lifting</h1><div class="mut">Loading…</div>`;
+  if(V.auth==="err")return `<h1>Lionheart Lifting</h1><section class="card"><div>Couldn’t reach your account, and this phone has no saved copy to show.</div><div class="mut" style="margin-top:6px">Check your signal and try again. Your data is safe in your account.</div><button class="pri" style="width:100%;margin-top:10px" data-a="retry">Try again</button></section>`;
+  if(V.auth==="recover")return `<h1>Choose a new password</h1><form id="rf" class="card"><label class="f">New password (8+ characters)<input id="np" type="password" autocomplete="new-password" minlength="8" required></label><button class="pri" style="width:100%;margin-top:12px">Save password</button><div class="mut" id="amsg" style="margin-top:8px">${esc(V.amsg||"")}</div></form>`;
+  const up=V.am==="up";
+  return `<h1>Lionheart Lifting</h1><div class="mut">Sign in to save your training to your account.</div>
+<div class="tabs"><button type="button" class="${up?"":"sel"}" data-a="amode" data-m="in">Sign in</button><button type="button" class="${up?"sel":""}" data-a="amode" data-m="up">Create account</button></div>
+<form id="af" class="card"><label class="f">Email<input id="em" type="email" inputmode="email" autocomplete="username" value="${esc(V.em||"")}" required></label>
+<label class="f" style="margin-top:8px">Password${up?" (8+ characters)":""}<input id="pw" type="password" autocomplete="${up?"new-password":"current-password"}" minlength="8" required></label>
+<button class="pri" style="width:100%;margin-top:12px">${up?"Create account":"Sign in"}</button>
+<div class="mut" id="amsg" style="margin-top:8px">${esc(V.amsg||"")}</div>${up?"":'<button type="button" class="lnk" data-a="forgot">Forgot password?</button>'}</form>`;
+}
+async function push(){
+  if(!sb||!U||pushing||V.auth!=="app")return;
+  pushing=true;V.sync="saving";syncUI();
+  try{
+    if(V.rc){const r=await sb.from("user_state").select("state").eq("user_id",U).maybeSingle();if(r.error)throw r.error;V.rc=0;const c=r.data&&r.data.state;
+      if(c&&(c.u||0)>(S.u||0)){S=migrate(c);last=JSON.stringify(S);try{localStorage.setItem(LK,last)}catch(e){}dirty=false;V.sync="cloud";pushing=false;render();return}}
+    const snap=S.u;
+    const r=await sb.from("user_state").upsert({user_id:U,state:S,updated_at:new Date().toISOString()});
+    if(r.error)throw r.error;
+    V.sync="cloud";
+    if(S.u===snap)dirty=false;else{pushing=false;return push()}
+  }catch(e){V.sync="offline";clearTimeout(rt);rt=setTimeout(push,15000)}
+  pushing=false;syncUI();
+}
+async function refresh(){
+  if(!sb||!U||dirty||pushing||V.auth!=="app")return;
+  try{const r=await sb.from("user_state").select("state").eq("user_id",U).maybeSingle();if(r.error)throw r.error;const c=r.data&&r.data.state;
+    if(c&&(c.u||0)>(S.u||0)&&!dirty){S=migrate(c);last=JSON.stringify(S);try{localStorage.setItem(LK,last)}catch(e){}V.sync="cloud";render()}else{V.sync="cloud";syncUI()}}catch(e){}
+}
+async function loadUser(){
+  V.auth="loading";render();
+  LK="lh_u_"+U;
+  let loc=null;try{loc=JSON.parse(localStorage.getItem(LK))}catch(e){}
+  let cloud=null,bad=false;
+  try{const r=await sb.from("user_state").select("state").eq("user_id",U).maybeSingle();if(r.error)throw r.error;cloud=r.data&&r.data.state||null}catch(e){bad=true}
+  let up=false;
+  const hasEx=s=>!!(s&&s.p&&s.p.days&&s.p.days.some(d=>d.ex.length));
+  let leg=null;try{if(!localStorage.getItem("lh1_claimed"))leg=JSON.parse(localStorage.getItem("lh1"))}catch(e){}
+  const legOK=hasEx(leg),claim=()=>{try{localStorage.setItem("lh1_claimed",U)}catch(e){}};
+  if(bad){if(loc){S=loc;up=true}else{V.auth="err";render();return}}
+  else if(cloud){
+    if(!hasEx(cloud)&&!hasEx(loc)&&legOK){S=leg;claim();up=true}
+    else if(loc&&(loc.u||0)>(cloud.u||0)){S=loc;up=true}
+    else S=cloud;
+  }else{
+    if(loc&&(hasEx(loc)||!legOK))S=loc;
+    else if(legOK){S=leg;claim()}
+    else S=fresh();
+    up=true;
+  }
+  S=migrate(S);last=JSON.stringify(S);
+  try{localStorage.setItem(LK,last);localStorage.setItem("lh_last",U)}catch(e){}
+  V.auth="app";V.view=exs().length?"train":"setup";V.tab="new";V.open={};V.day=0;
+  V.sync=up?"saving":"cloud";if(up)dirty=true;if(bad)V.rc=1;
+  render();
+  if(up){if(bad){V.sync="offline";syncUI();clearTimeout(rt);rt=setTimeout(push,15000)}else push()}
+}
+function offlineLoad(){
+  try{const u=localStorage.getItem("lh_last");LK="lh_u_"+u;S=migrate(JSON.parse(localStorage.getItem(LK)));last=JSON.stringify(S);V.auth="app";V.sync="offline";V.view=exs().length?"train":"setup"}catch(e){V.auth="err"}
+  render();
+}
+function onSession(ev,s){
+  if(ev==="PASSWORD_RECOVERY")V.rec=1;
+  if(s&&s.user){
+    UE=s.user.email||"";
+    if(V.rec){U=s.user.id;V.auth="recover";render();return}
+    if(U!==s.user.id){U=s.user.id;loadUser()}
+    return;
+  }
+  if(ev==="INITIAL_SESSION"&&navigator.onLine===false&&localStorage.getItem("lh_last")){offlineLoad();return}
+  U=null;UE="";LK="lh1";dirty=false;S=migrate(fresh());last=JSON.stringify(S);V.auth="in";V.am=V.am||"in";V.ask=null;render();
+}
+async function authSubmit(){
+  const em=document.getElementById("em").value.trim(),pw=document.getElementById("pw").value,up=V.am==="up";V.em=em;
+  if(!em||pw.length<8){setMsg("Enter your email and a password of at least 8 characters.");return}
+  setMsg("Working…");
+  try{
+    if(up){const r=await sb.auth.signUp({email:em,password:pw,options:{emailRedirectTo:location.origin+location.pathname}});if(r.error)throw r.error;
+      if(!r.data||!r.data.session){V.am="in";V.amsg="Check your email for a confirmation link, then come back and sign in.";render()}}
+    else{const r=await sb.auth.signInWithPassword({email:em,password:pw});if(r.error)throw r.error}
+  }catch(e){setMsg(friendly(e))}
+}
+async function recSubmit(){
+  const np=document.getElementById("np").value;if(np.length<8){setMsg("Use at least 8 characters.");return}
+  setMsg("Working…");
+  try{const r=await sb.auth.updateUser({password:np});if(r.error)throw r.error;V.rec=0;V.amsg="";try{history.replaceState(null,"",location.pathname)}catch(e){}loadUser()}catch(e){setMsg(friendly(e))}
+}
+async function authAct(a,b){
+  if(a==="amode"){V.am=b.dataset.m;V.amsg="";render();return}
+  if(a==="retry"){if(sb&&U)loadUser();else location.reload();return}
+  if(a==="forgot"){
+    const em=((document.querySelector("#em")||{}).value||"").trim();V.em=em;
+    if(!em){setMsg("Type your email above first, then tap Forgot password.");return}
+    try{const r=await sb.auth.resetPasswordForEmail(em,{redirectTo:location.origin+location.pathname});if(r.error)throw r.error;setMsg("If that email has an account, a reset link is on its way.")}catch(e){setMsg(friendly(e))}
+    return}
+  if(a==="so"){
+    if(dirty){clearTimeout(tm);await push()}
+    if(dirty&&V.ask!=="so"){V.ask="so";render();return}
+    V.ask=null;try{await sb.auth.signOut()}catch(e){}
+  }
+}
+document.addEventListener("submit",ev=>{ev.preventDefault();const id=ev.target.id;if(id==="af")authSubmit();else if(id==="rf")recSubmit()});
+document.addEventListener("visibilitychange",()=>{if(document.hidden){if(dirty){clearTimeout(tm);push()}}else refresh()});
+window.addEventListener("online",()=>{if(dirty)push();else refresh()});
+if(SBON){
+  V.auth="loading";
+  if(window.supabase){try{sb=window.supabase.createClient(SB.url,SB.key);sb.auth.onAuthStateChange((ev,s)=>setTimeout(()=>onSession(ev,s),0))}catch(e){sb=null}}
+  if(!sb){if(localStorage.getItem("lh_last"))offlineLoad();else V.auth="err"}
+}
 render();
-document.addEventListener("visibilitychange",()=>{if(document.hidden&&dirty){clearTimeout(tm);push()}});
-(async()=>{try{
-  if(!window.claude||!claude.use)return;
-  const db=await claude.use("db"),u=await claude.use("user");if(!db||!u)return;
-  const id=await u.id();if(!id)return;
-  CL=db.collection("data/users/"+id).doc("state");
-  const s=await CL.get();
-  if(s.exists&&s.data()&&s.data().json&&!dirty){S=JSON.parse(s.data().json);last=JSON.stringify(S);V.sync="cloud";render()}
-  else{V.sync="cloud";push();render()}
-}catch(e){}})();
 </script></body></html>
