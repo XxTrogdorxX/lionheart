@@ -1,0 +1,19 @@
+name: Keep database awake
+
+# Free Supabase projects can pause after a period of no activity.
+# This sends one tiny read request twice a week so the project stays active.
+on:
+  schedule:
+    - cron: "23 13 * * 1,4"   # Mondays and Thursdays, 13:23 UTC
+  workflow_dispatch:           # lets you run it by hand from the Actions tab
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping the database
+        run: |
+          curl --fail --silent --show-error --max-time 30 \
+            "https://vcjzbisjjrhfgvnuvobm.supabase.co/rest/v1/user_state?select=user_id&limit=1" \
+            -H "apikey: sb_publishable_RRmy1ukIPmWkddGAHsk8gw_ie-gbCiK"
+          echo "Ping OK"
