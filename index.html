@@ -14,8 +14,11 @@ h1{font-size:22px;margin:4px 0 2px}h2{font-size:17px;margin:0}
 .mut{color:var(--mut);font-size:14px}
 .row{display:flex;gap:8px;align-items:center}.sp{justify-content:space-between}
 .tabs{display:flex;gap:6px;margin:12px 0}
+.pg{height:6px;background:var(--line);border-radius:3px;margin:10px 0}.pg>i{display:block;height:100%;background:var(--ac);border-radius:3px}
+.chips{display:flex;gap:6px;overflow-x:auto;padding-bottom:4px}.chips button{flex:none;min-height:36px;padding:4px 12px;font-size:14px}.chips button.sel{background:var(--ac);color:var(--on);border-color:var(--ac)}
 button{font:inherit;border:1px solid var(--line);background:var(--card);color:var(--ink);border-radius:10px;padding:10px 12px;min-height:44px}
 button.pri{background:var(--ac);color:var(--on);border-color:var(--ac)}
+button.xb:active{background:var(--ac);color:var(--on);border-color:var(--ac)}
 .tabs button{flex:1}.tabs button.sel{background:var(--ac);color:var(--on);border-color:var(--ac)}
 .card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:12px;margin-bottom:12px}
 .set{display:grid;grid-template-columns:62px 1fr 1fr 1fr 44px;gap:6px;align-items:center;margin-top:6px}
@@ -65,15 +68,16 @@ function fresh(){
   return s;
 }
 try{const x=localStorage.getItem("lh1");S=x?JSON.parse(x):fresh()}catch(e){S=fresh()}
-const VER="2.4";
+const VER="2.14";
 function migrate(s){const v=s.v||1;
   if(s.p&&s.p.eq&&s.p.eq.Timed==null)s.p.eq.Timed=s.p.timeInc||15;
   if(!s.ds)s.ds={};
   if(v<3&&s.p)s.p.days.forEach((d,i)=>{for(let w=1;w<=s.week;w++){const ok=w<s.week||d.ex.every(e=>{const L=(s.logs[w]||{})[e.id];return L&&L.length>=e.ramp.length+e.sets&&L.every(x=>x.d)});if(ok&&d.ex.length)s.ds[w+":"+i]={done:1}}});
-  if(s.p){if(s.p.rir==null)s.p.rir=2;if(!s.p.plat)s.p.plat=3}regFor(s);s.v=5;return s}
+  if(s.p){if(s.p.rir==null)s.p.rir=2;if(!s.p.plat)s.p.plat=3;if(!s.pl)s.pl=[];if(s.wo==null)s.wo=0}regFor(s);s.v=5;return s}
 S=migrate(S);last=null;
 const exs=()=>S.p.days.flatMap(d=>d.ex);
-if(!exs().length)V.view="setup";
+const PW=()=>S.week-(S.wo||0);
+if(!exs().length)V.view="start";
 const isT=e=>e.eq==="Timed";
 const inc=e=>S.p.eq[e.eq]||0;
 const R=()=>S.p.rir==null?2:S.p.rir;
@@ -106,8 +110,8 @@ function tgtTime(e,wk){
 }
 function gen(e,wk){
   if(isT(e)){const t=tgtTime(e,wk);return Array.from({length:e.sets},()=>({pw:0,pr:t,d:0,rp:0}))}
-  const W=work(e,wk);
-  const rr=reps(e,wk,W);return e.ramp.map(p=>({pw:h(W*p),pr:e.goal,d:0,rp:1})).concat(Array.from({length:e.sets},()=>({pw:W,pr:rr,d:0,rp:0,tr:R()})));
+  const W=work(e,wk),K=W>0;
+  const rr=reps(e,wk,W);return e.ramp.map(p=>({pw:K?h(W*p):null,pr:e.goal,d:0,rp:1})).concat(Array.from({length:e.sets},()=>({pw:K?W:null,pr:rr,d:0,rp:0,tr:R()})));
 }
 function ens(wk,e){
   const lg=S.logs[wk]=S.logs[wk]||{};const L=lg[e.id]=lg[e.id]||[];
@@ -119,11 +123,12 @@ const fmt=n=>+(+n).toFixed(1);
 function dayDone(d){return d.ex.every(e=>ens(S.week,e).every(s=>s.d))}
 function hist(e){
   const out=[];
-  for(let k=S.week-1;k>=1;k--){
+  for(let k=S.week-1;k>(S.wo||0);k--){
     const L=S.logs[k]&&S.logs[k][e.id];if(!L)continue;
     const g=L.filter((s,i)=>s.d&&(isT(e)||i>=e.ramp.length));if(!g.length)continue;
     if(isT(e))out.push([k,Math.max(...g.map(s=>s.r))+" sec"]);
     else{const t=g.reduce((a,b)=>b.w>=a.w?b:a);out.push([k,fmt(t.w)+" × "+t.r+(t.i==null?"":" (RIR "+t.i+")")])}
+    out[out.length-1][0]=k-(S.wo||0);
   }
   return out.length?out.map(x=>`<div><span>Week ${x[0]}</span><span>${x[1]}</span></div>`).join(""):`<div class="mut">No past weeks logged yet.</div>`;
 }
@@ -131,7 +136,7 @@ function exCard(e,tag){
   const L=ens(S.week,e),t=isT(e),open=V.open[e.id];let n=0;
   const rows=L.map((s,i)=>{
     const ramp=i<e.ramp.length&&!t,lab=ramp?"Ramp":"Set "+(++n);
-    const tg=t?fmt(s.pr)+" sec":fmt(s.pw)+" × "+s.pr;
+    const tg=t?fmt(s.pr)+" sec":(s.pw==null?"—":fmt(s.pw))+" × "+s.pr;
     const v=(a,b)=>s.d||s[a]!=null?(s[a]==null?"":s[a]):b;
     const inp=(k,m,val,ph)=>`<input inputmode="${m}" data-k="${k}" placeholder="${ph}" value="${val==null?"":val}">`;
     return t?`<div class="set t${s.d?" on":""}" data-e="${e.id}" data-i="${i}"><span>${lab}<small>${tg}</small></span>${inp("r","numeric",v("r",s.pr),"sec")}<button data-a="ck" aria-label="Log set">✓</button></div>`
@@ -145,13 +150,13 @@ ${open?`<div class="hist">${hist(e)}</div>`:""}</section>`;
 const DS=i=>(S.ds[S.week+":"+i]=S.ds[S.week+":"+i]||{});
 const mins=d=>Math.max(1,Math.round((d.e-d.s)/6e4));
 function train(){
-  const days=S.p.days,all=days.length&&days.every((d,i)=>DS(i).done),last=S.week>=S.p.weeks;
+  const days=S.p.days,all=days.length&&days.every((d,i)=>DS(i).done),last=PW()>=S.p.weeks;
   const cards=days.map((d,i)=>{const s=DS(i),L=d.ex.flatMap(e=>ens(S.week,e)),n=L.filter(x=>x.d).length;
     const st=s.done?"Completed"+(s.s&&s.e?" · "+mins(s)+" min":""):n?`In progress · ${n}/${L.length} sets`:"Not started";
     return `<button class="card day${s.done?" ok":""}" data-a="open" data-i="${i}"><div class="row sp"><h2>${esc(d.name)}</h2><span>${s.done?"✓":"›"}</span></div><div class="mut">${st} · ${d.ex.length} exercises</div></button>`}).join("");
-  return `<div class="row sp"><div><h1>Lionheart Lifting</h1><div class="mut">Week ${S.week} of ${S.p.weeks} · <span id="sy">${syncText()}</span></div></div></div>
+  return `<div class="row sp"><div><h1>Lionheart Lifting</h1><div class="mut">Week ${PW()} of ${S.p.weeks} · <span id="sy">${syncText()}</span></div></div></div>
 <div style="margin-top:12px">${cards||'<section class="card"><div class="mut">No days yet. Open Settings to add some.</div></section>'}</div>
-<button class="${all?"pri":""}" style="width:100%" data-a="next" ${last?"disabled":""}>${last?"Block complete":V.ask==="next"?(all?"":"Some days aren’t complete. ")+"Tap again to start week "+(S.week+1):all?"All days done · Start next week":"Start next week"}</button><div class="mut" style="margin-top:8px;text-align:center">${V.msg||(Object.keys(S.logs).length&&(!S.bk||Date.now()-S.bk>6048e5)?"Tip: it’s been a while since your last backup (Settings → Backup).":"")}</div>`;
+<button class="${all?"pri":""}" style="width:100%" data-a="next" ${last?"disabled":""}>${last?"Block complete":V.ask==="next"?(all?"":"Some days aren’t complete. ")+"Tap again to start week "+(PW()+1):all?"All days done · Start next week":"Start next week"}</button><div class="mut" style="margin-top:8px;text-align:center">${V.msg||(Object.keys(S.logs).length&&(!S.bk||Date.now()-S.bk>6048e5)?"Tip: it’s been a while since your last backup (Settings → Backup).":"")}</div>`;
 }
 const fmtT=ms=>{const t=Math.floor(ms/1e3),h=Math.floor(t/3600),m=Math.floor(t%3600/60),s=t%60;return(h?h+":"+String(m).padStart(2,"0"):m)+":"+String(s).padStart(2,"0")};
 function ssTag(ex,j){let a=j,b=j;while(a>0&&ex[a-1].ss)a--;while(b<ex.length-1&&ex[b].ss)b++;return a===b?"":"Superset "+(j-a+1)+" of "+(b-a+1)}
@@ -159,7 +164,7 @@ setInterval(()=>{const x=document.getElementById("el");if(!x||V.view!=="day")ret
 function dayPage(){
   const i=V.di,d=S.p.days[i],s=DS(i),tm=x=>new Date(x).toLocaleTimeString([],{hour:"numeric",minute:"2-digit"});
   const info=s.done?"Completed"+(s.s&&s.e?" · "+mins(s)+" min":""):s.s?"Started "+tm(s.s):"";
-  return `<div class="row sp"><button data-a="home">‹ Week ${S.week}</button><div class="mut" style="text-align:right">${info}<br><span id="sy">${syncText()}</span><br><b id="el">${s.s&&!s.done?fmtT(Date.now()-s.s):""}</b></div></div><h1 style="margin-top:8px">${esc(d.name)}</h1>
+  return `<div class="row sp"><button data-a="home">‹ Week ${PW()}</button><div class="mut" style="text-align:right">${info}<br><span id="sy">${syncText()}</span><br><b id="el">${s.s&&!s.done?fmtT(Date.now()-s.s):""}</b></div></div><h1 style="margin-top:8px">${esc(d.name)}</h1>
 ${!s.s&&!s.done?'<button class="pri" style="width:100%;margin-bottom:12px" data-a="start">Start workout</button>':""}
 ${d.ex.length?d.ex.map((e,j)=>exCard(e,ssTag(d.ex,j))).join(""):'<section class="card"><div class="mut">No exercises yet. Add some in Settings.</div></section>'}
 ${s.done?'<button style="width:100%" data-a="reopen">Reopen day</button>':'<button class="pri" style="width:100%" data-a="fin">Complete day</button>'}`;
@@ -169,21 +174,25 @@ function setup(){
   const tabs=exs().length?"":`<div class="tabs"><button class="${V.tab==="restore"?"":"sel"}" data-a="tab" data-t="new">Start from scratch</button><button class="${V.tab==="restore"?"sel":""}" data-a="tab" data-t="restore">Restore from backup</button></div>`;
   if(!exs().length&&V.tab==="restore")return `<h1>Welcome</h1>${tabs}<section class="card"><h2>Restore from backup</h2><div class="mut">Paste the backup text you saved from another phone or an earlier session, then tap Restore.</div><textarea id="bk" rows="6" style="margin-top:8px"></textarea><button class="pri" style="width:100%;margin-top:8px" data-a="imp">Restore from text</button><div class="mut" id="bm"></div></section>`;
   const f=(lab,path,val,n)=>`<label class="f">${lab}<input data-p="${path}" ${n?'data-n="1" inputmode="decimal"':""} value="${esc(val)}"></label>`;
-  const st=V.st||(exs().length?"eq":"plan");
-  const stabs=exs().length?`<div class="tabs"><button class="${st==="eq"?"sel":""}" data-a="st" data-t="eq">Equipment</button><button class="${st==="plan"?"sel":""}" data-a="st" data-t="plan">Plan</button><button class="${st==="bk"?"sel":""}" data-a="st" data-t="bk">Backup</button><button class="${st==="wipe"?"sel":""}" data-a="st" data-t="wipe">Erase</button></div>`:"";
-  const head=exs().length?`<div class="row sp"><button data-a="prof">‹ Profile</button></div><h1 style="margin-top:8px">Settings</h1>`:`<div class="row sp"><h1>Settings</h1><button class="pri" data-a="back">Done</button></div>`;
+  const st=V.st||"";
+  const row=(k,h,s)=>`<button class="card day" data-a="st" data-t="${k}"><div class="row sp"><div><h2>${h}</h2><div class="mut">${s}</div></div><span>›</span></div></button>`;
+  const titles={eq:"Equipment",plan:"Current plan",bk:"Backup",close:"Close out plan",wipe:"Erase all data"};
+  const head=exs().length?(st&&titles[st]?`<div class="row sp"><button data-a="st" data-t="">‹ Settings</button></div><h1 style="margin-top:8px">${titles[st]}</h1>`:`<div class="row sp"><button data-a="prof">‹ Profile</button></div><h1 style="margin-top:8px">Settings</h1>`):`<div class="row sp"><h1>Settings</h1><button class="pri" data-a="back">Done</button></div>`;
+  const stabs="";
   const hint=exs().length?"":`<div class="mut" style="margin-bottom:10px">Add your days and exercises below, then tap Done. Set Current week to where you are in your block.</div>`;
   const eqc=`<section class="card"><h2>Equipment increments</h2><div class="mut">Weights in lb. Timed is in seconds.</div>${eqs.map(q=>`<div class="g" style="grid-template-columns:1fr 90px 44px"><input data-q="${esc(q)}" data-a2="eqn" value="${esc(q)}" ${q==="Timed"?"disabled":""}><input data-q="${esc(q)}" data-a2="eqv" inputmode="decimal" value="${p.eq[q]}"><button data-a="deq" data-q="${esc(q)}" ${q==="Timed"?"disabled":""}>✕</button></div>`).join("")}<button style="margin-top:8px" data-a="aeq">Add equipment</button></section>`;
-  const blk=`<section class="card"><h2>Block</h2><div class="g">${f("Weeks in block","weeks",p.weeks,1)}${f("Goal RIR","rir",R(),1)}${f("Plateau weeks","plat",p.plat||3,1)}</div>
-<div style="margin-top:8px" class="mut">Current week: <input style="width:70px;display:inline" data-p="__week" data-n="1" inputmode="numeric" value="${S.week}"></div></section>`;
+  const blk=`<section class="card"><h2>Block</h2>${f("Plan name","name",p.name||"My Plan")}<div class="g" style="margin-top:8px">${f("Weeks in block","weeks",p.weeks,1)}${f("Goal RIR","rir",R(),1)}${f("Plateau weeks","plat",p.plat||3,1)}</div>
+<div style="margin-top:8px" class="mut">Current week: <input style="width:70px;display:inline" data-p="__week" data-n="1" inputmode="numeric" value="${PW()}"></div></section>`;
   const plan=blk+p.days.map((d,di)=>`<section class="card"><div class="row sp">${f("Day name",`days.${di}.name`,d.name)}<button data-a="dday" data-i="${di}">${V.ask==="d"+di?"Tap again to remove":"Remove day"}</button></div>
 ${d.ex.map((e,ei)=>{const b=`days.${di}.ex.${ei}.`;return `<div class="card" style="background:var(--bg)">${f("Exercise",b+"name",e.name)}<div class="g"><label class="f">Equipment<select data-p="${b}eq">${eqs.map(q=>`<option ${q==e.eq?"selected":""}>${esc(q)}</option>`).join("")}</select></label>
-${f("Sets",b+"sets",e.sets,1)}${f("Start weight",b+"start",e.start,1)}${f(isT(e)?"Goal (sec)":"Goal reps",b+"goal",e.goal,1)}</div>
+${f("Sets",b+"sets",e.sets,1)}${f("Start weight (0 = enter as you lift)",b+"start",e.start,1)}${f(isT(e)?"Goal (sec)":"Goal reps",b+"goal",e.goal,1)}</div>
 ${isT(e)?"":`<label class="f" style="margin-top:8px">Ramp % (blank = none, e.g. 50, 80)<input data-p="${b}ramp" data-r="1" value="${e.ramp.map(x=>Math.round(x*100)).join(", ")}"></label>`}
-${ei<d.ex.length-1?`<label class="f" style="display:flex;gap:8px;align-items:center;margin-top:8px"><input type="checkbox" style="width:auto" data-p="${b}ss" data-c="1" ${e.ss?"checked":""}>Superset with next exercise</label>`:""}<div class="row" style="margin-top:8px"><button data-a="mv" data-d="${di}" data-i="${ei}" data-dir="-1">↑</button><button data-a="mv" data-d="${di}" data-i="${ei}" data-dir="1">↓</button><button data-a="dex" data-d="${di}" data-i="${ei}">Remove exercise</button></div></div>`}).join("")}<button data-a="aex" data-i="${di}">Add exercise</button></section>`).join("")+`<button style="width:100%;margin-bottom:12px" data-a="aday">Add day</button>`;
-  const bkc=`<section class="card"><h2>Backup</h2><div class="mut">Optional. Copy the text and keep it in Notes. Paste it back to restore.</div><div class="mut">Last backup: ${S.bk?new Date(S.bk).toLocaleDateString():"never"} · App v${VER}</div><textarea id="bk" rows="4"></textarea><div class="row" style="margin-top:8px"><button data-a="exp">Copy backup</button><button data-a="imp">Restore from text</button></div><div class="mut" id="bm"></div></section>`;
+${ei<d.ex.length-1?`<label class="f" style="display:flex;gap:8px;align-items:center;margin-top:8px"><input type="checkbox" style="width:auto" data-p="${b}ss" data-c="1" ${e.ss?"checked":""}>Superset with next exercise</label>`:""}<div class="row" style="margin-top:8px"><button data-a="mv" data-d="${di}" data-i="${ei}" data-dir="-1">↑</button><button data-a="mv" data-d="${di}" data-i="${ei}" data-dir="1">↓</button><button data-a="dex" data-d="${di}" data-i="${ei}">Remove exercise</button></div></div>`}).join("")}<div class="row" style="gap:8px"><button class="xb" style="flex:1" data-a="lib" data-i="${di}">Add from library</button><button class="xb" style="flex:1" data-a="aex" data-i="${di}">Custom exercise</button></div></section>`).join("")+`<button style="width:100%;margin-bottom:12px" data-a="aday">Add day</button>`;
+  const bkc=`<section class="card"><h2>Export my data</h2><div class="mut">Your data is yours. Save a file to Files, email it or send it anywhere. The backup file can be restored here; the log file opens in a spreadsheet.</div><div class="row" style="margin-top:8px"><button class="xb" data-a="dl">Backup file</button><button class="xb" data-a="csv">Workout log (CSV)</button></div><div class="mut" id="em" style="margin-top:6px"></div></section><section class="card"><h2>Backup</h2><div class="mut">Optional. Copy the text and keep it in Notes. Paste it back to restore.</div><div class="mut">Last backup: ${S.bk?new Date(S.bk).toLocaleDateString():"never"} · App v${VER}</div><textarea id="bk" rows="4"></textarea><div class="row" style="margin-top:8px"><button data-a="exp">Copy backup</button><button data-a="imp">Restore from text</button></div><div class="mut" id="bm"></div></section>`;
   const wp=`<section class="card"><h2>Erase all data</h2><div class="mut">Removes your program and logs, including the copy in your account. Copy your backup first.</div><button style="margin-top:8px" data-a="wipe">${V.ask==="wipe"?"Tap again to erase everything":"Erase all data"}</button></section>`;
-  const body=!exs().length?eqc+plan:st==="eq"?eqc:st==="plan"?plan:st==="bk"?bkc:wp;
+  const clp=`<section class="card"><div class="mut">Finish this plan and start a new one. Everything you logged stays in History, and this plan is saved under History → Plans so you can reuse it.</div><button style="margin-top:8px" data-a="close">${V.ask==="close"?"Tap again to close out this plan":"Close out plan"}</button></section>`;
+  const menu=row("eq","Equipment","Weight increments for each type of equipment")+row("plan","Current plan","Name, block length, days and exercises")+row("bk","Backup","Export, copy and restore your data")+row("close","Close out plan","Finish this plan and start a new one")+row("wipe","Erase all data","Remove everything, including your account copy");
+  const body=!exs().length?eqc+plan:st==="eq"?eqc:st==="plan"?plan:st==="bk"?bkc:st==="close"?clp:st==="wipe"?wp:menu;
   return head+stabs+tabs+hint+body;
 }
 function profPage(){
@@ -196,7 +205,7 @@ function profPage(){
   return `<h1>Profile</h1>${a}
 <section class="card"><h2>Quick stats</h2><div class="g" style="grid-template-columns:1fr 1fr 1fr">${stat("Weeks trained",wk)}${stat("Workouts",wo)}${stat("Total volume (lb)",n0(vol))}</div></section>
 <button class="card day" data-a="hnav"><div class="row sp"><h2>History</h2><span>›</span></div></button>
-<button class="card day" data-a="setup"><div class="row sp"><h2>Settings</h2><span>›</span></div></button>`;
+${exs().length?`<button class="card day" data-a="setup"><div class="row sp"><h2>Settings</h2><span>›</span></div></button>`:""}`;
 }
 const kn=n=>String(n).trim().toLowerCase();
 function regFor(s){if(!s.p)return;const x=s.xs=s.xs||{};s.p.days.forEach(d=>d.ex.forEach(e=>{const n=String(e.name).trim(),tm=e.eq==="Timed"?1:0,r=e.ramp.length,o=x[e.id];if(!o||o.n!==n||o.t!==tm||o.r!==r)x[e.id]={n,t:tm,r}}))}
@@ -243,9 +252,47 @@ function sumPage(){
 <section class="card" style="margin-top:12px"><h2>New records</h2>${s.recs.length?s.recs.map(r=>`<div style="margin-top:8px"><b>${esc(r.name)}</b><div class="mut">${r.label}: ${r.val} (was ${r.prev})</div></div>`).join(""):'<div class="mut" style="margin-top:6px">No new records this time.</div>'}</section>
 <button class="pri" style="width:100%" data-a="sumdone">Done</button>`;
 }
+function histTabs(){return `<div class="seg"><button class="${V.hv==="plans"?"":"sel"}" data-a="hv" data-m="mov">Movements</button><button class="${V.hv==="plans"?"sel":""}" data-a="hv" data-m="plans">Plans</button></div>`}
+function planStats(pl){
+  let wk=0,wo=0,t0=null,t1=null;
+  for(let w=pl.from;w<=pl.to;w++){let any=false;Object.values(S.logs[w]||{}).forEach(L=>L.forEach(s=>{if(s.d){any=true;if(s.t){t0=t0==null?s.t:Math.min(t0,s.t);t1=t1==null?s.t:Math.max(t1,s.t)}}}));if(any)wk++}
+  Object.keys(S.ds||{}).forEach(k=>{const w=+k.split(":")[0];if(w>=pl.from&&w<=pl.to&&S.ds[k].done)wo++});
+  t0=t0||pl.st;t1=t1||pl.t;const f=x=>new Date(x).toLocaleDateString(undefined,{month:"short",day:"numeric",year:"numeric"});
+  return{wk,wo,range:t0&&t1?f(t0)+" – "+f(t1):""};
+}
+function planCards(act){
+  if(!S.pl.length)return `<section class="card"><div class="mut">No past plans yet. When you close out a plan in Settings → Plan, it shows up here.</div></section>`;
+  return S.pl.map((pl,i)=>[pl,i]).reverse().map(([pl,i])=>{const s=planStats(pl);return `<button class="card day" data-a="${act}" data-i="${i}"><div class="row sp"><div><h2>${esc(pl.n)}</h2><div class="mut">${pl.days.length} days · ${s.wk} weeks · ${s.wo} workouts</div>${s.range?`<div class="mut">${s.range}</div>`:""}</div><span>›</span></div></button>`}).join("");
+}
+function plansTab(){
+  const cur=exs().length?`<section class="card"><div class="mut">Current plan</div><h2>${esc(S.p.name||"My Plan")}</h2><div class="mut">Week ${PW()} of ${S.p.weeks}</div></section>`:"";
+  return cur+`<div class="mut" style="margin:10px 0 6px">Past plans</div>`+planCards("pl");
+}
+function lastVals(pl,e){
+  if(isT(e)){for(let k=pl.to;k>=pl.from;k--){const L=S.logs[k]&&S.logs[k][e.id];if(!L)continue;const g=L.filter(s=>s.d);if(!g.length)continue;const t0=L[0].pr||e.goal;return{start:0,goal:g.every(s=>s.r>=t0)?t0+(S.p.eq.Timed||15):t0}}return{start:0,goal:e.goal}}
+  for(let k=pl.to;k>=pl.from;k--){const w=wsets(e,k);if(w)return{start:rnd(avg(w.map(s=>s.w)),inc(e)),goal:e.goal}}
+  return{start:e.start,goal:e.goal};
+}
+function pastPage(){
+  const pl=S.pl[V.pi];if(!pl){V.view=V.pfrom==="start"?"pastl":"hist";return V.view==="pastl"?pastListPage():histPage()}
+  const s=planStats(pl);
+  return `<div class="row sp"><button data-a="plback">‹ Back</button></div><h1 style="margin-top:8px">${esc(pl.n)}</h1><div class="mut" style="margin-bottom:10px">${pl.days.length} days · ${s.wk} weeks · ${s.wo} workouts${s.range?" · "+s.range:""}</div>`+pl.days.map(d=>`<section class="card"><h2>${esc(d.name)}</h2>${d.ex.map(e=>{const v=lastVals(pl,e),tm=isT(e);return `<div class="row sp" style="margin-top:6px"><span>${esc(e.name)}</span><span class="mut">${e.sets} × ${tm?v.goal+" sec":e.goal+(v.start>0?" · "+fmt(v.start)+" lb":"")}</span></div>`}).join("")}</section>`).join("")+`<div class="mut" style="margin-bottom:10px">Reusing starts each exercise at the weight you finished on. You can change anything after.</div><button class="pri" style="width:100%;margin-bottom:12px" data-a="ru">${exs().length?(V.ask==="ru"?"Tap again to close out your current plan and reuse this one":"Close out current plan and reuse"):"Reuse this plan"}</button>`;
+}
+function pastListPage(){return `<div class="row sp"><button data-a="s-back">‹ Back</button></div><h1 style="margin-top:8px">Past plans</h1><div class="mut" style="margin-bottom:10px">Pick one to reuse.</div>`+planCards("pl")}
+function uniqueName(n){
+  const b=String(n).replace(/\s*\(\d+\)$/,""),all=S.pl.map(x=>x.n).concat(exs().length?[S.p.name]:[]);
+  if(!all.includes(b))return b;let k=2;while(all.includes(b+" ("+k+")"))k++;return b+" ("+k+")";
+}
+function closeOut(){
+  const wo=S.wo||0;
+  S.pl.push({n:S.p.name||"My Plan",days:JSON.parse(JSON.stringify(S.p.days)),weeks:S.p.weeks,from:wo+1,to:S.week,st:S.p.st||null,t:Date.now()});
+  S.p.days=[{name:"Day 1",ex:[]}];S.p.name="My Plan";delete S.p.st;
+  S.wo=S.week;S.week++;S.day=0;V.open={};V.wz=null;V.view="start";
+}
 function histPage(){
+  if(V.hv==="plans")return `<h1>History</h1>${histTabs()}${plansTab()}`;
   const rows=Object.values(movs()).filter(v=>msets(v).length).sort((a,b)=>a.name.localeCompare(b.name));
-  return `<div class="row sp"><button data-a="prof">‹ Profile</button></div><h1 style="margin-top:8px">History</h1><div class="mut" style="margin-bottom:10px">Movements you've logged</div>`+(rows.length?rows.map(v=>`<button class="card day" data-a="hm" data-k="${esc(v.k)}"><div class="row sp"><h2>${esc(v.name)}</h2><span>›</span></div></button>`).join(""):`<section class="card"><div class="mut">Nothing logged yet. Check off a set on the Train tab and the movement will show up here.</div></section>`);
+  return `<div class="row sp"><button data-a="prof">‹ Profile</button></div><h1 style="margin-top:8px">History</h1>${histTabs()}<div class="mut" style="margin:10px 0">Movements you've logged</div>`+(rows.length?rows.map(v=>`<button class="card day" data-a="hm" data-k="${esc(v.k)}"><div class="row sp"><h2>${esc(v.name)}</h2><span>›</span></div></button>`).join(""):`<section class="card"><div class="mut">Nothing logged yet. Check off a set on the Train tab and the movement will show up here.</div></section>`);
 }
 function gpts(sets,metric){
   const f=MET[metric],byWk={},wkT={};
@@ -287,15 +334,82 @@ function movPage(){
   return `<div class="row sp"><button data-a="hback">‹ History</button></div><h1 style="margin-top:8px">${esc(mv.name)}</h1>${recs}
 <section class="card"><h2>Progress</h2>${mv.t?"":seg([["e1rm","Est. 1RM"],["wt","Weight"],["vol","Volume"]],gm,"gm")}${seg([["4","4 wks"],["12","12 wks"],["all","All"]],V.gr||"all","gr")}${chart(g,unit,mv.name)}</section>`;
 }
+const csvC=v=>{v=v==null?"":String(v);return /[",\n]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v};
+function mkCsv(){
+  const dn={};S.p.days.forEach(d=>d.ex.forEach(e=>dn[e.id]=d.name));
+  const rows=[["Week","Date","Day","Exercise","Set","Type","Weight (lb)","Reps or seconds","RIR","Planned weight","Planned reps"]];
+  Object.keys(S.logs).map(Number).sort((a,b)=>a-b).forEach(wk=>{
+    Object.keys(S.logs[wk]||{}).forEach(id=>{const x=(S.xs||{})[id]||{},nm=x.n||id;
+      S.logs[wk][id].forEach((s,i)=>{if(!s.d)return;
+        const ramp=s.rp===1||(s.rp===undefined&&i<(x.r||0));
+        rows.push([wk,s.t?new Date(s.t).toISOString().slice(0,10):"",dn[id]||"",nm,i+1,ramp?"ramp":"working",x.t?"":s.w,s.r,s.i,x.t?"":s.pw,s.pr])})})});
+  return rows.map(r=>r.map(csvC).join(",")).join("\n")+"\n";
+}
+function giveFile(name,text,type){
+  try{const f=new File([text],name,{type});
+    if(navigator.canShare&&navigator.canShare({files:[f]}))
+      return navigator.share({files:[f]}).then(()=>"Done.",e=>e&&e.name==="AbortError"?"":"Couldn’t share the file. Try the Copy backup button below.")}catch(e){}
+  try{const u=URL.createObjectURL(new Blob([text],{type})),a=document.createElement("a");a.href=u;a.download=name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(u),4000);return Promise.resolve("Downloaded "+name+".")}
+  catch(e){return Promise.resolve("This browser can’t save files. Use the Copy backup button below.")}
+}
+const LIB=[["Back Squat","Legs","Barbell"],["Barbell Calf Raise","Legs","Barbell"],["Barbell Good Morning","Legs","Barbell"],["Barbell Hip Thrust","Legs","Barbell"],["Barbell Lunge","Legs","Barbell"],["Bodyweight Squat","Legs","Body Weight"],["Bulgarian Split Squat","Legs","Dumbbell"],["Cable Pull-Through","Legs","Cable"],["Conventional Deadlift","Legs","Barbell"],["Dumbbell Calf Raise","Legs","Dumbbell"],["Dumbbell Lunge","Legs","Dumbbell"],["Dumbbell Romanian Deadlift","Legs","Dumbbell"],["Dumbbell Step-Up","Legs","Dumbbell"],["Front Squat","Legs","Barbell"],["Glute Bridge","Legs","Body Weight"],["Goblet Squat","Legs","Dumbbell"],["Hack Squat","Legs","Machine"],["Hip Abduction","Legs","Machine"],["Hip Adduction","Legs","Machine"],["Leg Extension","Legs","Machine"],["Leg Press","Legs","Machine"],["Lying Leg Curl","Legs","Machine"],["Nordic Curl","Legs","Body Weight"],["Pendulum Squat","Legs","Machine"],["Reverse Lunge","Legs","Dumbbell"],["Romanian Deadlift","Legs","Barbell"],["Seated Calf Raise","Legs","Machine"],["Seated Leg Curl","Legs","Machine"],["Smith Machine Squat","Legs","Machine"],["Standing Calf Raise","Legs","Machine"],["Stiff-Leg Deadlift","Legs","Barbell"],["Sumo Deadlift","Legs","Barbell"],["Trap Bar Deadlift","Legs","Barbell"],["Walking Lunge","Legs","Dumbbell"],["Bench Press","Chest","Barbell"],["Cable Fly","Chest","Cable"],["Chest Dip","Chest","Body Weight"],["Chest Press Machine","Chest","Machine"],["Close-Grip Bench Press","Chest","Barbell"],["Decline Bench Press","Chest","Barbell"],["Diamond Push-Up","Chest","Body Weight"],["Dumbbell Bench Press","Chest","Dumbbell"],["Dumbbell Fly","Chest","Dumbbell"],["Dumbbell Pullover","Chest","Dumbbell"],["Floor Press","Chest","Barbell"],["High-to-Low Cable Fly","Chest","Cable"],["Incline Bench Press","Chest","Barbell"],["Incline Chest Press Machine","Chest","Machine"],["Incline Dumbbell Fly","Chest","Dumbbell"],["Incline Dumbbell Press","Chest","Dumbbell"],["Incline Push-Up","Chest","Body Weight"],["Low-to-High Cable Fly","Chest","Cable"],["Pec Deck","Chest","Machine"],["Push-Up","Chest","Body Weight"],["Smith Machine Bench Press","Chest","Machine"],["Assisted Pull-Up","Back","Machine"],["Back Extension","Back","Machine"],["Barbell Row","Back","Barbell"],["Barbell Shrug","Back","Barbell"],["Chest-Supported Dumbbell Row","Back","Dumbbell"],["Chest-Supported Row Machine","Back","Machine"],["Chin-Up","Back","Body Weight"],["Close-Grip Lat Pulldown","Back","Cable"],["Dumbbell Shrug","Back","Dumbbell"],["Face Pull","Back","Cable"],["Hyperextension","Back","Body Weight"],["Inverted Row","Back","Body Weight"],["Lat Pulldown","Back","Machine"],["Neutral-Grip Pull-Up","Back","Body Weight"],["One-Arm Dumbbell Row","Back","Dumbbell"],["Pendlay Row","Back","Barbell"],["Pull-Up","Back","Body Weight"],["Rack Pull","Back","Barbell"],["Seated Cable Row","Back","Cable"],["Seated Row Machine","Back","Machine"],["Single-Arm Cable Row","Back","Cable"],["Straight-Arm Pulldown","Back","Cable"],["T-Bar Row","Back","Barbell"],["Arnold Press","Shoulders","Dumbbell"],["Cable Lateral Raise","Shoulders","Cable"],["Cable Rear Delt Fly","Shoulders","Cable"],["Dumbbell Shoulder Press","Shoulders","Dumbbell"],["Front Raise","Shoulders","Dumbbell"],["Lateral Raise","Shoulders","Dumbbell"],["Overhead Press","Shoulders","Barbell"],["Pike Push-Up","Shoulders","Body Weight"],["Push Press","Shoulders","Barbell"],["Rear Delt Fly","Shoulders","Dumbbell"],["Reverse Pec Deck","Shoulders","Machine"],["Seated Lateral Raise","Shoulders","Dumbbell"],["Shoulder Press Machine","Shoulders","Machine"],["Upright Row","Shoulders","Barbell"],["Assisted Dip","Arms","Machine"],["Barbell Curl","Arms","Barbell"],["Bench Dip","Arms","Body Weight"],["Cable Curl","Arms","Cable"],["Cable Hammer Curl","Arms","Cable"],["Cable Preacher Curl","Arms","Cable"],["Close-Grip Push-Up","Arms","Body Weight"],["Dumbbell Curl","Arms","Dumbbell"],["Dumbbell Kickback","Arms","Dumbbell"],["EZ-Bar Curl","Arms","Barbell"],["Hammer Curl","Arms","Dumbbell"],["Incline Dumbbell Curl","Arms","Dumbbell"],["Overhead Cable Triceps Extension","Arms","Cable"],["Overhead Triceps Extension","Arms","Dumbbell"],["Preacher Curl","Arms","Barbell"],["Preacher Curl Machine","Arms","Machine"],["Reverse Curl","Arms","Barbell"],["Rope Pushdown","Arms","Cable"],["Skull Crusher","Arms","Barbell"],["Triceps Dip","Arms","Body Weight"],["Triceps Extension Machine","Arms","Machine"],["Triceps Pushdown","Arms","Cable"],["Ab Crunch Machine","Core","Machine"],["Ab Wheel Rollout","Core","Body Weight"],["Bicycle Crunch","Core","Body Weight"],["Cable Crunch","Core","Cable"],["Cable Woodchop","Core","Cable"],["Crunch","Core","Body Weight"],["Dead Bug","Core","Body Weight"],["Dead Hang","Core","Timed"],["Farmer's Carry","Core","Timed"],["Hanging Knee Raise","Core","Body Weight"],["Hanging Leg Raise","Core","Body Weight"],["Hollow Hold","Core","Timed"],["L-Sit","Core","Timed"],["Lying Leg Raise","Core","Body Weight"],["Mountain Climber","Core","Body Weight"],["Pallof Press","Core","Cable"],["Plank","Core","Timed"],["Russian Twist","Core","Body Weight"],["Side Plank","Core","Timed"],["Sit-Up","Core","Body Weight"],["Suitcase Carry","Core","Timed"],["V-Up","Core","Body Weight"],["Wall Sit","Core","Timed"],["Barbell Thruster","Full Body","Barbell"],["Burpee","Full Body","Body Weight"],["Dumbbell Thruster","Full Body","Dumbbell"],["Kettlebell Swing","Full Body","Dumbbell"],["Power Clean","Full Body","Barbell"],["Turkish Get-Up","Full Body","Dumbbell"]];
+const LGS=["All","Legs","Chest","Back","Shoulders","Arms","Core","Full Body"];
+const LDI={Barbell:5,Dumbbell:10,Machine:5,Cable:10,"Body Weight":0,Timed:15},LST={};
+const PD=()=>V.wz?V.wz.days:S.p.days;
+function libList(){
+  const d=PD()[V.pd]||{ex:[]},have=new Set(d.ex.map(e=>kn(e.name))),q=kn(V.q||"").split(/\s+/).filter(Boolean),g=V.lg||"All";
+  const r=[];LIB.forEach((l,i)=>{if(g!=="All"&&l[1]!==g)return;const h=kn(l[0]+" "+l[1]+" "+l[2]);if(q.every(w=>h.includes(w)))r.push([l,i])});
+  return (r.length?r.map(([l,i])=>`<button class="card day" data-a="la" data-i="${i}"><div class="row sp"><div><h2>${esc(l[0])}</h2><div class="mut">${esc(l[1])} · ${esc(l[2])}</div></div><span>${have.has(kn(l[0]))?"✓":"+"}</span></div></button>`).join(""):`<section class="card"><div class="mut">No matches. Try a shorter search, or add a custom exercise from the plan page.</div></section>`);
+}
+function pickPage(){
+  const d=PD()[V.pd];if(!d){V.view=V.wz?"wiz":"setup";return V.wz?wizPage():setup()}
+  const g=V.lg||"All";
+  return `<div class="row sp"><div><h1>Add exercises</h1><div class="mut">To ${esc(d.name)}${V.added?" · "+V.added+" added":""}</div></div><button class="pri" data-a="ldone">Done</button></div>
+<input id="lq" type="search" placeholder="Search exercises" value="${esc(V.q||"")}" style="margin:10px 0 6px" autocomplete="off">
+<div class="chips">${LGS.map(x=>`<button class="${x===g?"sel":""}" data-a="lg" data-g="${esc(x)}">${esc(x)}</button>`).join("")}</div>
+<div id="ll" style="margin-top:8px">${libList()}</div>`;
+}
+const PLANS=[{"n":"Full body","d":"3 days a week. Every day trains the whole body. A classic, simple plan.","days":[{"n":"Full Body A","ex":[["Back Squat",3,6],["Bench Press",3,8],["Barbell Row",3,8],["Overhead Press",3,8],["Romanian Deadlift",3,8],["Plank",3,45]]},{"n":"Full Body B","ex":[["Leg Press",3,10],["Incline Dumbbell Press",3,10],["Lat Pulldown",3,10],["Lateral Raise",3,12],["Seated Leg Curl",3,10],["Dumbbell Curl",3,10]]},{"n":"Full Body C","ex":[["Conventional Deadlift",3,5],["Dumbbell Bench Press",3,10],["Pull-Up",3,8],["Dumbbell Shoulder Press",3,10],["Goblet Squat",3,10],["Hanging Leg Raise",3,10]]}]},{"n":"Upper / Lower","d":"4 days a week. Two upper-body days and two lower-body days.","days":[{"n":"Upper 1","ex":[["Bench Press",4,6],["Barbell Row",4,8],["Overhead Press",3,8],["Lat Pulldown",3,10],["Triceps Pushdown",3,10],["Dumbbell Curl",3,10]]},{"n":"Lower 1","ex":[["Back Squat",4,6],["Romanian Deadlift",3,8],["Leg Press",3,10],["Seated Leg Curl",3,10],["Standing Calf Raise",3,12],["Plank",3,45]]},{"n":"Upper 2","ex":[["Incline Dumbbell Press",4,8],["Seated Cable Row",4,10],["Dumbbell Shoulder Press",3,10],["Pull-Up",3,8],["Lateral Raise",3,12],["Hammer Curl",3,10],["Rope Pushdown",3,12]]},{"n":"Lower 2","ex":[["Conventional Deadlift",3,5],["Front Squat",3,8],["Walking Lunge",3,10],["Leg Extension",3,12],["Seated Calf Raise",3,12],["Hanging Leg Raise",3,10]]}]},{"n":"Push / Pull / Legs","d":"3 days a week. Push, pull and legs, each trained once. Run it twice a week for 6 days by adding days later.","days":[{"n":"Push","ex":[["Bench Press",4,6],["Overhead Press",3,8],["Incline Dumbbell Press",3,10],["Lateral Raise",3,12],["Triceps Pushdown",3,10],["Overhead Triceps Extension",3,12]]},{"n":"Pull","ex":[["Barbell Row",4,8],["Pull-Up",3,8],["Seated Cable Row",3,10],["Face Pull",3,12],["Barbell Curl",3,10],["Hammer Curl",3,10]]},{"n":"Legs","ex":[["Back Squat",4,6],["Romanian Deadlift",3,8],["Leg Press",3,10],["Seated Leg Curl",3,10],["Standing Calf Raise",4,12],["Cable Crunch",3,12]]}]},{"n":"Body-part split","d":"5 days a week. Chest, back, shoulders, arms and legs each get their own day.","days":[{"n":"Chest","ex":[["Bench Press",4,6],["Incline Dumbbell Press",3,10],["Cable Fly",3,12],["Chest Dip",3,10],["Pec Deck",3,12]]},{"n":"Back","ex":[["Conventional Deadlift",3,5],["Barbell Row",4,8],["Lat Pulldown",3,10],["Seated Cable Row",3,10],["Face Pull",3,12]]},{"n":"Shoulders","ex":[["Overhead Press",4,6],["Lateral Raise",4,12],["Rear Delt Fly",3,12],["Upright Row",3,10],["Barbell Shrug",3,10]]},{"n":"Arms","ex":[["Barbell Curl",3,10],["Skull Crusher",3,10],["Hammer Curl",3,10],["Triceps Pushdown",3,12],["Incline Dumbbell Curl",3,12],["Overhead Cable Triceps Extension",3,12]]},{"n":"Legs","ex":[["Back Squat",4,6],["Leg Press",3,10],["Romanian Deadlift",3,8],["Leg Extension",3,12],["Seated Leg Curl",3,12],["Standing Calf Raise",4,12]]}]}];
+const nid=()=>"x"+Date.now()+"_"+(nid.c=(nid.c||0)+1);
+function newWiz(){return{step:1,n:3,days:[1,2,3].map(k=>({name:"Day "+k,ex:[]})),weeks:12,rir:2,name:"My Plan"}}
+function startPage(){
+  const c=(a,h,s)=>`<button class="card day" data-a="${a}"><div class="row sp"><div><h2>${h}</h2><div class="mut">${s}</div></div><span>›</span></div></button>`;
+  return `<h1>Set up your training</h1><div class="mut" style="margin-bottom:12px">Choose how you'd like to begin.</div>
+${c("s-new","Build from scratch","Answer a few questions and pick your own exercises.")}${c("s-pre","Pick a pre-built plan","Start from a ready-made layout, then change anything.")}${S.pl&&S.pl.length?c("s-past","Reuse a past plan","Start again from a plan you finished, at the weights you ended on."):""}${c("s-rest","Restore from backup","Paste a backup you saved earlier.")}${SBON&&U?`<div class="mut" style="margin-top:14px;text-align:center">Signed in as ${esc(UE)} · <button class="lnk" data-a="so">${V.ask==="so"?"Tap again to sign out":"Sign out"}</button></div>`:""}`;
+}
+function restPage(){return `<div class="row sp"><button data-a="s-back">‹ Back</button></div><h1 style="margin-top:8px">Restore from backup</h1><section class="card"><div class="mut">Paste the backup text you saved from another phone or an earlier session, then tap Restore.</div><textarea id="bk" rows="6" style="margin-top:8px"></textarea><button class="pri" style="width:100%;margin-top:8px" data-a="imp">Restore from text</button><div class="mut" id="bm"></div></section>`}
+function prePage(){return `<div class="row sp"><button data-a="s-back">‹ Back</button></div><h1 style="margin-top:8px">Pick a plan</h1><div class="mut" style="margin-bottom:10px">You can change anything after you choose.</div>`+PLANS.map((q,i)=>`<button class="card day" data-a="pp" data-i="${i}"><div class="row sp"><div><h2>${esc(q.n)}</h2><div class="mut">${q.days.length} days a week</div><div class="mut">${esc(q.d)}</div></div><span>›</span></div></button>`).join("")}
+function prevPage(){
+  const q=PLANS[V.pv];if(!q){V.view="pre";return prePage()}
+  return `<div class="row sp"><button data-a="s-pre">‹ Plans</button></div><h1 style="margin-top:8px">${esc(q.n)}</h1><div class="mut" style="margin-bottom:10px">${esc(q.d)}</div>`+q.days.map(d=>`<section class="card"><h2>${esc(d.n)}</h2>${d.ex.map(e=>`<div class="row sp" style="margin-top:6px"><span>${esc(e[0])}</span><span class="mut">${e[1]} × ${LIB.find(l=>l[0]===e[0])[2]==="Timed"?"45 sec":e[2]}</span></div>`).join("")}</section>`).join("")+`<div class="mut" style="margin-bottom:10px">Weights start blank. Enter what you lift in week 1 and the app takes it from there.</div><button class="pri" style="width:100%;margin-bottom:12px" data-a="pu">Use this plan</button>`;
+}
+function wizPage(){
+  const w=V.wz;if(!w){V.view="start";return startPage()}
+  const st=w.step,eqs=Object.keys(S.p.eq);
+  const head=`<div class="row sp"><button data-a="wback">‹ Back</button><div class="mut">Step ${st} of 4</div></div><div class="pg"><i style="width:${st*25}%"></i></div>`;
+  const f=(lab,path,val,n)=>`<label class="f">${lab}<input data-w="${path}" ${n?'data-n="1" inputmode="decimal"':""} value="${esc(val)}"></label>`;
+  const next=(lab)=>`<div class="mut" style="margin:6px 0">${esc(V.wmsg||"")}</div><button class="pri" style="width:100%;margin:6px 0 12px" data-a="${lab[0]}">${lab[1]}</button>`;
+  if(st===1)return head+`<h1>How many days a week?</h1><div class="mut">Pick the days you plan to train, then name them.</div><div class="chips" style="margin:10px 0">${[1,2,3,4,5,6,7].map(n=>`<button class="${n===w.n?"sel":""}" data-a="wn" data-i="${n}">${n}</button>`).join("")}</div>${w.days.map((d,i)=>`<section class="card">${f("Day "+(i+1)+" name",`days.${i}.name`,d.name)}</section>`).join("")}`+next(["wnext","Next"]);
+  if(st===2)return head+`<h1>Choose your exercises</h1><div class="mut">Add exercises to each day from the library, or make your own.</div>`+w.days.map((d,i)=>`<section class="card"><h2>${esc(d.name)}</h2>${d.ex.map((e,j)=>`<div class="row sp" style="margin-top:8px">${e.c?`<input style="flex:1" data-w="days.${i}.ex.${j}.name" value="${esc(e.name)}">`:`<span>${esc(e.name)} <span class="mut">· ${esc(e.eq)}</span></span>`}<button data-a="wrx" data-i="${i}" data-j="${j}" aria-label="Remove">✕</button></div>`).join("")}<div class="row" style="gap:8px;margin-top:10px"><button class="xb" style="flex:1" data-a="wlib" data-i="${i}">Add from library</button><button class="xb" style="flex:1" data-a="wcx" data-i="${i}">Custom exercise</button></div></section>`).join("")+next(["wnext","Next"]);
+  if(st===3)return head+`<h1>Set your goals</h1><div class="mut">Choose sets and goal reps for each movement. If you don't know your starting weight yet, leave it at 0 and enter it as you lift.</div>`+w.days.map((d,i)=>d.ex.length?`<h2 style="margin:14px 0 6px">${esc(d.name)}</h2>`+d.ex.map((e,j)=>{const b=`days.${i}.ex.${j}.`,tm=e.eq==="Timed";return `<section class="card"><h2>${esc(e.name)}</h2><div class="g"><label class="f">Equipment<select data-w="${b}eq">${eqs.map(q=>`<option ${q===e.eq?"selected":""}>${esc(q)}</option>`).join("")}</select></label>${f("Sets",b+"sets",e.sets,1)}${f(tm?"Goal (sec)":"Goal reps",b+"goal",e.goal,1)}${tm?"":f("Start weight",b+"start",e.start,1)}</div></section>`}).join(""):"").join("")+next(["wnext","Next"]);
+  return head+`<h1>Last details</h1>${f("Plan name","name",w.name)}<div class="g" style="margin-top:10px">${f("Weeks in block","weeks",w.weeks,1)}${f("Goal RIR","rir",w.rir,1)}</div><section class="card" style="margin-top:12px"><h2>What's RIR?</h2><div class="mut">Reps in reserve: how many more reps you could have done. A goal RIR of 2 means you stop each set with about 2 reps left. The app uses it to set your next week's weights.</div></section>`+next(["wdone","Create my plan"]);
+}
+function commitDays(days){
+  const eq=S.p.eq;days.forEach(d=>d.ex.forEach(e=>{if(!(e.eq in eq))eq[e.eq]=LDI[e.eq]??5}));
+  S.p.days=days.map(d=>({name:d.name||"Day",ex:d.ex.map(e=>({id:nid(),name:String(e.name||"").trim()||"Exercise",eq:e.eq,start:+e.start||0,goal:+e.goal||(e.eq==="Timed"?45:8),sets:Math.max(1,+e.sets||3),ramp:(e.ramp||[]).slice()}))}));S.p.st=Date.now();
+  if(!Object.keys(S.logs).length){S.week=1;S.day=0}V.open={};
+}
 function navBar(){
-  const v=V.view,it=[["back","Train",v==="train"],["prof","Profile",v==="prof"||v==="hist"||v==="mov"||v==="setup"]];
+  const v=V.view,it=[exs().length?["back","Train",v==="train"]:["gs","Setup",v==="start"],["prof","Profile",v==="prof"||v==="hist"||v==="mov"||v==="setup"||v==="ppl"]];
   return `<div style="height:84px"></div><nav class="nav">${it.map(x=>`<button class="${x[2]?"sel":""}" data-a="${x[0]}">${x[1]}</button>`).join("")}</nav>`;
 }
 function render(){
   if(V.auth!=="app"){$("#app").innerHTML=authScreen();return}
   if(V.view==="day"&&!S.p.days[V.di])V.view="train";
-  const v=V.view,body=v==="train"?train():v==="day"?dayPage():v==="prof"?profPage():v==="hist"?histPage():v==="mov"?movPage():v==="sum"?sumPage():setup();
-  $("#app").innerHTML=body+(V.view==="day"||V.view==="sum"?"":navBar());
+  if(V.view==="start"&&exs().length&&!V.wz)V.view="train";
+  if(!exs().length&&["train","setup"].includes(V.view))V.view="start";
+  const v=V.view,body=v==="train"?train():v==="day"?dayPage():v==="ppl"?pastPage():v==="pastl"?pastListPage():v==="start"?startPage():v==="rest"?restPage():v==="pre"?prePage():v==="prev"?prevPage():v==="wiz"?wizPage():v==="pick"?pickPage():v==="prof"?profPage():v==="hist"?histPage():v==="mov"?movPage():v==="sum"?sumPage():setup();
+  $("#app").innerHTML=body+((["day","sum","pick","rest","pre","prev","wiz","pastl"].includes(V.view)||(V.view==="ppl"&&V.pfrom==="start"))?"":navBar());
   save();
 }
 const setPath=(o,path,v)=>{const k=path.split(".");let c=o;for(let i=0;i<k.length-1;i++)c=c[k[i]];c[k[k.length-1]]=v};
@@ -303,6 +417,9 @@ document.addEventListener("change",ev=>{
   const t=ev.target;
   if(t.dataset.k){const row=t.closest(".set"),e=exs().find(x=>x.id===row.dataset.e),s=ens(S.week,e)[+row.dataset.i];
     s[t.dataset.k]=t.value===""?null:+t.value;save();return}
+  if(t.dataset.w){let v=t.value;if(t.dataset.n)v=+v||0;setPath(V.wz,t.dataset.w,v);
+    if(/\.eq$/.test(t.dataset.w)&&v==="Timed"){const k=t.dataset.w.replace(/eq$/,"");setPath(V.wz,k+"goal",45);setPath(V.wz,k+"start",0)}
+    render();return}
   if(t.dataset.a2){const q=t.dataset.q,eq=S.p.eq;
     if(t.dataset.a2==="eqv")eq[q]=+t.value||0;
     else if(t.value&&t.value!==q&&!(t.value in eq)){const n={};for(const k in eq)n[k===q?t.value:k]=eq[k];S.p.eq=n;exs().forEach(e=>{if(e.eq===q)e.eq=t.value})}
@@ -310,13 +427,14 @@ document.addEventListener("change",ev=>{
   if(t.dataset.p){const p=t.dataset.p;let v=t.value;
     if(t.dataset.c)v=t.checked?1:0;else if(t.dataset.r)v=v.split(/[ ,]+/).filter(Boolean).map(x=>+x/100).filter(x=>x>0);
     else if(t.dataset.n)v=+v||0;
-    if(p==="__week")S.week=Math.max(1,Math.min(S.p.weeks,v||1));else setPath(S.p,p,v);
+    if(p==="__week")S.week=(S.wo||0)+Math.max(1,Math.min(S.p.weeks,v||1));else setPath(S.p,p,v);
     render()}
 });
+document.addEventListener("input",ev=>{const t=ev.target;if(t&&t.id==="lq"){V.q=t.value;const l=document.getElementById("ll");if(l)l.innerHTML=libList()}});
 document.addEventListener("click",ev=>{
   {const c=ev.target.closest&&ev.target.closest("circle[data-pt]");if(c){V.sel=+c.dataset.pt;render();return}}
   const b=ev.target.closest("button[data-a]");if(!b)return;
-  const a=b.dataset.a,i=+b.dataset.i;if(a!=="next"&&a!=="dday"&&a!=="wipe"&&a!=="so")V.ask=null;if(AUTH.includes(a)){authAct(a,b);return}
+  const a=b.dataset.a,i=+b.dataset.i;if(a!=="next"&&a!=="dday"&&a!=="wipe"&&a!=="so"&&a!=="close"&&a!=="ru")V.ask=null;if(AUTH.includes(a)){authAct(a,b);return}
   if(a==="ck"){const row=b.closest(".set"),e=exs().find(x=>x.id===row.dataset.e),s=ens(S.week,e)[+row.dataset.i];
     row.querySelectorAll("input").forEach(n=>{if(n.value!=="")s[n.dataset.k]=+n.value});
     if(!s.d){if(isT(e)){if(s.r==null)s.r=s.pr}else{if(s.w==null)s.w=s.pw;if(s.r==null)s.r=s.pr}}
@@ -324,7 +442,7 @@ document.addEventListener("click",ev=>{
   if(a==="hist"){V.open[b.dataset.e]=!V.open[b.dataset.e]}
   else if(a==="day")S.day=i;
   else if(a==="next"){if(V.ask!=="next")V.ask="next";else{V.ask=null;S.week++;S.day=0;V.open={};scrollTo(0,0)}}
-  else if(a==="wipe"){if(V.ask!=="wipe")V.ask="wipe";else{V.ask=null;S=migrate(fresh());V.view="setup";V.st="plan";V.tab="new";V.open={};scrollTo(0,0)}}
+  else if(a==="wipe"){if(V.ask!=="wipe")V.ask="wipe";else{V.ask=null;S=migrate(fresh());V.view="start";V.wz=null;V.tab="new";V.open={};scrollTo(0,0)}}
   else if(a==="tab"){V.tab=b.dataset.t}
   else if(a==="open"){V.view="day";V.di=i;scrollTo(0,0)}
   else if(a==="home"){V.view="train";scrollTo(0,0)}
@@ -338,16 +456,47 @@ document.addEventListener("click",ev=>{
   else if(a==="start"){DS(V.di).s=Date.now()}
   else if(a==="fin"){const q=DS(V.di);q.e=Date.now();q.done=1;V.sum=mkSummary(V.di);V.view="sum";scrollTo(0,0)}
   else if(a==="reopen"){const q=DS(V.di);q.done=0;delete q.e}
-  else if(a==="setup"){V.view="setup";V.st=null;scrollTo(0,0)}
+  else if(a==="setup"){V.view=exs().length?"setup":"start";V.st=null;scrollTo(0,0)}
   else if(a==="prof"){V.view="prof";scrollTo(0,0)}
   else if(a==="st"){V.st=b.dataset.t}
   else if(a==="back"){V.view="train";scrollTo(0,0)}
   else if(a==="aeq"){let n="New equipment",c=1;while(n in S.p.eq)n="New equipment "+(++c);S.p.eq[n]=5}
   else if(a==="deq"){if(!exs().some(e=>e.eq===b.dataset.q))delete S.p.eq[b.dataset.q];else alert("Some exercises use this equipment.")}
+  else if(a==="gs"){V.view="start";scrollTo(0,0)}
+  else if(a==="hv"){V.hv=b.dataset.m}
+  else if(a==="pl"){V.pi=i;V.pfrom=V.view==="pastl"?"start":"hist";V.view="ppl";scrollTo(0,0)}
+  else if(a==="plback"){V.view=V.pfrom==="start"?"pastl":"hist";scrollTo(0,0)}
+  else if(a==="s-past"){V.view="pastl";scrollTo(0,0)}
+  else if(a==="close"){if(V.ask!=="close")V.ask="close";else{V.ask=null;closeOut();scrollTo(0,0)}}
+  else if(a==="ru"){const pl=S.pl[V.pi];if(pl){if(exs().length&&V.ask!=="ru")V.ask="ru";else{V.ask=null;if(exs().length)closeOut();
+    const nm=uniqueName(pl.n);commitDays(pl.days.map(d=>({name:d.name,ex:d.ex.map(e=>{const v=lastVals(pl,e);return{name:e.name,eq:e.eq,start:v.start,goal:v.goal,sets:e.sets,ramp:e.ramp}})})));
+    S.p.name=nm;S.p.weeks=pl.weeks;V.view="setup";V.st="plan";scrollTo(0,0)}}}
+  else if(a==="s-new"){V.wz=V.wz||newWiz();V.wmsg="";V.view="wiz";scrollTo(0,0)}
+  else if(a==="s-pre"){V.view="pre";scrollTo(0,0)}
+  else if(a==="s-rest"){V.view="rest";scrollTo(0,0)}
+  else if(a==="s-back"){V.view="start";scrollTo(0,0)}
+  else if(a==="pp"){V.pv=i;V.view="prev";scrollTo(0,0)}
+  else if(a==="pu"){const q=PLANS[V.pv];if(q){commitDays(q.days.map(d=>({name:d.n,ex:d.ex.map(e=>{const l=LIB.find(x=>x[0]===e[0]),tm=l[2]==="Timed";return{name:e[0],eq:l[2],start:0,goal:tm?45:e[2],sets:e[1]}})})));S.p.name=q.n;V.view="setup";V.st="plan";scrollTo(0,0)}}
+  else if(a==="wn"){const w=V.wz;w.n=i;while(w.days.length<i)w.days.push({name:"Day "+(w.days.length+1),ex:[]});w.days.length=i}
+  else if(a==="wback"){const w=V.wz;V.wmsg="";if(w.step>1)w.step--;else{V.wz=null;V.view="start"}scrollTo(0,0)}
+  else if(a==="wnext"){const w=V.wz;V.wmsg="";if(w.step===2&&!w.days.some(d=>d.ex.length)){V.wmsg="Add at least one exercise to continue."}else{w.step++;if(w.step===3)w.days=w.days}scrollTo(0,0)}
+  else if(a==="wlib"){V.view="pick";V.pd=i;V.q="";V.lg="All";V.added=0;scrollTo(0,0)}
+  else if(a==="wcx"){V.wz.days[i].ex.push({name:"New exercise",eq:Object.keys(S.p.eq)[0],start:0,goal:8,sets:3,c:1})}
+  else if(a==="wrx"){V.wz.days[i].ex.splice(+b.dataset.j,1)}
+  else if(a==="wdone"){const w=V.wz;commitDays(w.days.filter(d=>d.ex.length));S.p.weeks=Math.max(1,+w.weeks||12);S.p.rir=Math.max(0,+w.rir||0);S.p.name=w.name||"My Plan";V.wz=null;V.view="train";scrollTo(0,0)}
+  else if(a==="lib"){V.view="pick";V.pd=i;V.q="";V.lg="All";V.added=0;V.st="plan";scrollTo(0,0)}
+  else if(a==="lg"){V.lg=b.dataset.g}
+  else if(a==="ldone"){V.view=V.wz?"wiz":"setup";scrollTo(0,0)}
+  else if(a==="la"){const l=LIB[i],d=PD()[V.pd];if(l&&d){if(!(l[2] in S.p.eq))S.p.eq[l[2]]=LDI[l[2]]??5;const tm=l[2]==="Timed";
+    d.ex.push({id:"x"+Date.now()+"_"+(V.added||0),name:l[0],eq:l[2],start:LST[l[2]]??0,goal:tm?45:8,sets:3,ramp:[]});V.added=(V.added||0)+1}}
   else if(a==="aex")S.p.days[i].ex.push({id:"x"+Date.now(),name:"New exercise",eq:Object.keys(S.p.eq)[0],start:45,goal:8,sets:3,ramp:[]});
   else if(a==="dex")S.p.days[+b.dataset.d].ex.splice(i,1);
   else if(a==="aday")S.p.days.push({name:"Day "+(S.p.days.length+1),ex:[]});
   else if(a==="dday"){if(V.ask!=="d"+i)V.ask="d"+i;else{V.ask=null;S.p.days.splice(i,1);S.day=0}}
+  else if(a==="dl"||a==="csv"){const d=new Date().toISOString().slice(0,10);let r;
+    if(a==="dl"){S.bk=Date.now();save();r=giveFile("lionheart-backup-"+d+".json",JSON.stringify(S),"application/json")}
+    else r=giveFile("lionheart-workout-log-"+d+".csv",mkCsv(),"text/csv");
+    r.then(m=>{const e=document.getElementById("em");if(e)e.textContent=m});return}
   else if(a==="exp"){S.bk=Date.now();save();const t=$("#bk");t.value=JSON.stringify(S);t.select();try{navigator.clipboard.writeText(t.value)}catch(e){}$("#bm").textContent="Backup text ready. If it didn’t copy, select it and copy manually.";return}
   else if(a==="imp"){try{const o=JSON.parse($("#bk").value);if(!o.p||!o.logs)throw 0;S=migrate(o);V.view="train";V.msg="Restored."}catch(e){$("#bm").textContent="That text isn’t a valid backup.";return}}
   render();
@@ -414,13 +563,13 @@ async function loadUser(){
   }
   S=migrate(S);last=JSON.stringify(S);
   try{localStorage.setItem(LK,last);localStorage.setItem("lh_last",U)}catch(e){}
-  V.auth="app";V.view=exs().length?"train":"setup";V.tab="new";V.open={};V.day=0;
+  V.auth="app";V.view=exs().length?"train":"start";V.tab="new";V.open={};V.day=0;
   V.sync=up?"saving":"cloud";if(up)dirty=true;if(bad)V.rc=1;
   render();
   if(up){if(bad){V.sync="offline";syncUI();clearTimeout(rt);rt=setTimeout(push,15000)}else push()}
 }
 function offlineLoad(){
-  try{const u=localStorage.getItem("lh_last");LK="lh_u_"+u;S=migrate(JSON.parse(localStorage.getItem(LK)));last=JSON.stringify(S);V.auth="app";V.sync="offline";V.view=exs().length?"train":"setup"}catch(e){V.auth="err"}
+  try{const u=localStorage.getItem("lh_last");LK="lh_u_"+u;S=migrate(JSON.parse(localStorage.getItem(LK)));last=JSON.stringify(S);V.auth="app";V.sync="offline";V.view=exs().length?"train":"start"}catch(e){V.auth="err"}
   render();
 }
 function onSession(ev,s){
