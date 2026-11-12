@@ -14,6 +14,10 @@ h1{font-size:22px;margin:4px 0 2px}h2{font-size:17px;margin:0}
 .mut{color:var(--mut);font-size:14px}
 .row{display:flex;gap:8px;align-items:center}.sp{justify-content:space-between}
 .tabs{display:flex;gap:6px;margin:12px 0}
+.wkg{display:grid;grid-template-columns:repeat(6,1fr);gap:6px}.wkg button{min-height:50px;padding:4px 2px;font-size:15px;line-height:1.1}.wkg small{display:block;font-size:10px;font-weight:400}
+.wkb.d{background:var(--okbg);border-color:var(--ok);color:var(--ink)}.wkb.t{background:var(--ac);border-color:var(--ac);color:var(--on)}
+.slots{display:flex;flex-wrap:wrap;gap:10px;margin-top:8px}.slot button{min-height:36px;padding:2px 10px}
+.card.note{border-color:var(--ac)}
 .pg{height:6px;background:var(--line);border-radius:3px;margin:10px 0}.pg>i{display:block;height:100%;background:var(--ac);border-radius:3px}
 .card.on{border-color:var(--ac);background:#3d3025}.card.day.on span:last-child{color:var(--ac);font-weight:700}
 .tag{font-size:11px;font-weight:600;color:var(--ac);border:1px solid var(--ac);border-radius:8px;padding:1px 6px;margin-left:4px;vertical-align:middle}
@@ -70,7 +74,7 @@ function fresh(){
   return s;
 }
 try{const x=localStorage.getItem("lh1");S=x?JSON.parse(x):fresh()}catch(e){S=fresh()}
-const VER="2.17";
+const VER="2.18";
 function migrate(s){const v=s.v||1;
   if(s.p&&s.p.eq&&s.p.eq.Timed==null)s.p.eq.Timed=s.p.timeInc||15;
   if(!s.ds)s.ds={};
@@ -83,22 +87,37 @@ if(!exs().length)V.view="start";
 const isT=e=>e.eq==="Timed";
 const inc=e=>S.p.eq[e.eq]||0;
 const R=()=>S.p.rir==null?2:S.p.rir;
+const pwk=k=>k-(S.wo||0);
+const wtype=k=>(S.p.wt&&S.p.wt[pwk(k)])||"n";
+const isTest=(e,k)=>wtype(k)==="t"&&!!e.tl&&!isT(e);
+const skipWk=(e,k)=>wtype(k)==="d"||isTest(e,k);
+const dlv=()=>S.p.dl||{w:10,s:50};
+const setsFor=(e,k)=>wtype(k)==="d"?Math.max(1,Math.ceil(e.sets*dlv().s/100)):e.sets;
+const needN=(e,k)=>isTest(e,k)?6:e.ramp.length+setsFor(e,k);
+function gW(e,k){
+  const v=S.p.wv;if(isT(e)||!v||!v.length||wtype(k)==="d")return e.goal;
+  let c=0;for(let x=1;x<=pwk(k);x++)if(((S.p.wt||{})[x]||"n")!=="d")c++;
+  return Math.max(1,e.goal+(+v[((c-1)%v.length+v.length)%v.length]||0));
+}
 function reps(e,wk,W){
-  const G=e.goal,p=prev(e,wk),st=inc(e),N=S.p.plat||3;
-  if(!p||isT(e)||!st||!(W>0))return G;
-  for(let j=0;j<N;j++){const w=wsets(e,p.k-j);if(!w)return G;
+  const G=gW(e,wk),p=prev(e,wk),st=inc(e),N=S.p.plat||3;
+  if(!p||isT(e)||!st||!(W>0)||(S.p.wv&&S.p.wv.length)||wtype(wk)==="d")return G;
+  let kk=p.k;
+  for(let j=0;j<N;j++){while(kk>=1&&skipWk(e,kk))kk--;const w=wsets(e,kk);kk--;if(!w)return G;
     if(!w.every(s=>s.r>=G)||avg(w.map(s=>s.i==null?R():s.i))>R()||Math.abs(avg(w.map(s=>s.w))-W)>=st/2)return G}
   return Math.min(G+4,Math.max(G,Math.ceil(30*((W+st)/W*(1+(G+R())/30)-1)-R()-1e-9)));
 }
 function wsets(e,k){const L=S.logs[k]&&S.logs[k][e.id];if(!L)return;const w=L.filter((s,i)=>s.d&&i>=e.ramp.length&&s.w>0&&s.r>0);return w.length?w:null}
-function prev(e,wk){for(let k=wk-1;k>=1;k--){const w=wsets(e,k);if(w)return{w,k}}}
-function calc(e,w){const base=avg(w.map(s=>s.w)),est=avg(w.map(s=>s.w*(1+(s.r+(s.i==null?R():s.i))/30)/(1+(e.goal+R())/30)));return{base,est:rnd(Math.max(base*.9,Math.min(base*1.1,est)),inc(e))}}
+function prev(e,wk){for(let k=wk-1;k>=1;k--){if(skipWk(e,k))continue;const w=wsets(e,k);if(w)return{w,k}}}
+function calc(e,w,G,lim){G=G||e.goal;lim=lim||.1;const base=avg(w.map(s=>s.w)),est=avg(w.map(s=>s.w*(1+(s.r+(s.i==null?R():s.i))/30)/(1+(G+R())/30)));return{base,est:rnd(Math.max(base*(1-lim),Math.min(base*(1+lim),est)),inc(e))}}
 const dn=c=>c.est<rnd(c.base,0)-1e-6;
 function work(e,wk){
+  if(e.nw&&e.nw.wk===wk)return e.nw.w;
   const p=prev(e,wk);if(!p)return e.start;
-  const c=calc(e,p.w),miss=wk-1-p.k;
+  const Gn=gW(e,wk),Gp=gW(e,p.k),same=Gn===Gp,c=calc(e,p.w,Gn,same?.1:.2);let miss=0;
+  for(let k=p.k+1;k<wk;k++)if(!skipWk(e,k))miss++;
   if(miss>0)return rnd(c.base*Math.pow(.95,miss),inc(e));
-  if(dn(c)){const q=wsets(e,p.k-1);if(!q||!dn(calc(e,q)))return rnd(c.base,inc(e))}
+  if(same&&dn(c)){let k2=p.k-1;while(k2>=1&&skipWk(e,k2))k2--;const q=k2>=1?wsets(e,k2):null;if(!q||!dn(calc(e,q,Gp)))return rnd(c.base,inc(e))}
   return c.est;
 }
 function tgtTime(e,wk){
@@ -111,13 +130,19 @@ function tgtTime(e,wk){
   return e.goal;
 }
 function gen(e,wk){
-  if(isT(e)){const t=tgtTime(e,wk);return Array.from({length:e.sets},()=>({pw:0,pr:t,d:0,rp:0}))}
-  const W=work(e,wk),K=W>0;
-  const rr=reps(e,wk,W);return e.ramp.map(p=>({pw:K?h(W*p):null,pr:e.goal,d:0,rp:1})).concat(Array.from({length:e.sets},()=>({pw:K?W:null,pr:rr,d:0,rp:0,tr:R()})));
+  if(isT(e)){const t=tgtTime(e,wk);return Array.from({length:setsFor(e,wk)},()=>({pw:0,pr:t,d:0,rp:0}))}
+  if(isTest(e,wk)){
+    const b=work(e,wk),st=inc(e),r2=x=>st?rnd(x,st):h(x),m=b>0?b*(1+(e.goal+R())/30):0,K2=m>0;
+    return [[.5,5],[.7,3],[.85,2],[.92,1]].map(([f,r])=>({pw:K2?r2(m*f):null,pr:r,d:0,rp:1})).concat([1,1.025].map(f=>({pw:K2?r2(m*f):null,pr:1,d:0,rp:0,tr:0})));
+  }
+  let W=work(e,wk);const dl=wtype(wk)==="d";
+  if(dl&&W>0){const x=rnd(W*(1-dlv().w/100),inc(e));if(x>0)W=x}
+  const K=W>0,G=gW(e,wk),rr=dl?G:reps(e,wk,W);
+  return e.ramp.map(p=>({pw:K?h(W*p):null,pr:G,d:0,rp:1})).concat(Array.from({length:setsFor(e,wk)},()=>({pw:K?W:null,pr:rr,d:0,rp:0,tr:R()})));
 }
 function ens(wk,e){
   const lg=S.logs[wk]=S.logs[wk]||{};const L=lg[e.id]=lg[e.id]||[];
-  if(L.length<e.ramp.length+e.sets){const g=gen(e,wk);for(let i=L.length;i<g.length;i++)L.push(g[i])}
+  if(L.length<needN(e,wk)){const g=gen(e,wk);for(let i=L.length;i<g.length;i++)L.push(g[i])}
   return L;
 }
 const esc=s=>String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
@@ -127,7 +152,7 @@ function hist(e){
   const out=[];
   for(let k=S.week-1;k>(S.wo||0);k--){
     const L=S.logs[k]&&S.logs[k][e.id];if(!L)continue;
-    const g=L.filter((s,i)=>s.d&&(isT(e)||i>=e.ramp.length));if(!g.length)continue;
+    const g=L.filter((s,i)=>s.d&&(isT(e)||(s.rp!==undefined?s.rp!==1:i>=e.ramp.length)));if(!g.length)continue;
     if(isT(e))out.push([k,Math.max(...g.map(s=>s.r))+" sec"]);
     else{const t=g.reduce((a,b)=>b.w>=a.w?b:a);out.push([k,fmt(t.w)+" × "+t.r+(t.i==null?"":" (RIR "+t.i+")")])}
     out[out.length-1][0]=k-(S.wo||0);
@@ -137,7 +162,7 @@ function hist(e){
 function exCard(e,tag){
   const L=ens(S.week,e),t=isT(e),open=V.open[e.id];let n=0;
   const rows=L.map((s,i)=>{
-    const ramp=i<e.ramp.length&&!t,lab=ramp?"Ramp":"Set "+(++n);
+    const tw=isTest(e,S.week),ramp=(s.rp!==undefined?s.rp===1:i<e.ramp.length)&&!t,lab=ramp?(tw?"Work-up":"Ramp"):(tw?"Attempt ":"Set ")+(++n);
     const tg=t?fmt(s.pr)+" sec":(s.pw==null?"—":fmt(s.pw))+" × "+s.pr;
     const v=(a,b)=>s.d||s[a]!=null?(s[a]==null?"":s[a]):b;
     const inp=(k,m,val,ph)=>`<input inputmode="${m}" data-k="${k}" placeholder="${ph}" value="${val==null?"":val}">`;
@@ -145,20 +170,60 @@ function exCard(e,tag){
     :`<div class="set${s.d?" on":""}" data-e="${e.id}" data-i="${i}"><span>${lab}<small>${tg}</small></span>${inp("w","decimal",v("w",s.pw),"lb")}${inp("r","numeric",v("r",s.pr),"reps")}${inp("i","numeric",s.i,"RIR")}<button data-a="ck" aria-label="Log set">✓</button></div>`;
   }).join("");
   return `<section class="card${tag?" ss":""}">${tag?`<div class="mut" style="font-weight:600;color:var(--ac)">${tag}</div>`:""}<div class="row sp"><h2>${esc(e.name)}</h2><button class="lnk" data-a="hist" data-e="${e.id}">${open?"Hide":"History"}</button></div>
-<div class="mut">${e.sets} sets · goal ${t?e.goal+" sec":e.goal+" reps"}${e.ramp.length&&!t?" · ramp "+e.ramp.map(x=>Math.round(x*100)+"%").join(", "):""}</div>
+<div class="mut">${isTest(e,S.week)?"Max test · work up to a max single":setsFor(e,S.week)+" sets · goal "+(t?e.goal+" sec":gW(e,S.week)+" reps")+(e.ramp.length&&!t?" · ramp "+e.ramp.map(x=>Math.round(x*100)+"%").join(", "):"")}</div>
 <div class="hd${t?" t":""}"><span></span>${t?"<span>seconds</span>":"<span>weight</span><span>reps</span><span>RIR</span>"}<span></span></div>${rows}
 ${open?`<div class="hist">${hist(e)}</div>`:""}</section>`;
 }
 const DS=i=>(S.ds[S.week+":"+i]=S.ds[S.week+":"+i]||{});
 const mins=d=>Math.max(1,Math.round((d.e-d.s)/6e4));
+
+const tgt=()=>V.view==="wiz"&&V.wz?V.wz:S.p;
+function resetUnlogged(){const L=S.logs[S.week];if(!L)return;exs().forEach(e=>{const l=L[e.id];if(l&&!l.some(s=>s.d))delete L[e.id]})}
+const WPRE=[["Heavy / Light / Medium",[-3,2,0]],["3-week step-down",[0,-2,-4]],["4-week ramp",[0,-1,-2,-3]]];
+function advBlock(o,sc){
+  const n=Math.max(1,+o.weeks||12),wt=o.wt||{},dl=o.dl||{w:10,s:50},wv=o.wv||null;
+  const lab={n:"",d:"Deload",t:"Test"};
+  const grid=Array.from({length:n},(_,i)=>{const w=i+1,ty=wt[w]||"n";return `<button class="wkb ${ty}" data-a="wk" data-i="${w}"><b>${w}</b><small>${lab[ty]||"&nbsp;"}</small></button>`}).join("");
+  const ex=(sc==="w"?V.wz.days:S.p.days).flatMap((d,di)=>d.ex.map((e,ej)=>[e,di,ej])).filter(x=>x[0].eq!=="Timed");
+  const tl=ex.length?ex.map(([e,di,ej])=>`<label class="f" style="display:flex;gap:8px;align-items:center;margin-top:6px"><input type="checkbox" style="width:auto" data-${sc==="w"?"w":"p"}="days.${di}.ex.${ej}.tl" data-c="1" ${e.tl?"checked":""}>${esc(e.name)}</label>`).join(""):`<div class="mut">Add exercises first.</div>`;
+  const slots=wv?wv.map((v,i)=>`<div class="slot"><div class="mut">Wk ${i+1}</div><div class="row" style="gap:4px"><button data-a="gwd" data-i="${i}">−</button><b style="min-width:30px;text-align:center">${v>0?"+"+v:v}</b><button data-a="gwu" data-i="${i}">+</button></div></div>`).join(""):"";
+  const ex8=wv?wv.map(v=>Math.max(1,8+v)).join(" · "):"";
+  return `<section class="card"><h2>Week types</h2><div class="mut">Tap a week to cycle Normal, Deload and Test. Deload weeks are lighter. On test weeks your chosen lifts work up to a max single.</div>
+<div class="wkg" style="margin-top:8px">${grid}</div>
+<div class="row" style="gap:6px;flex-wrap:wrap;margin-top:8px"><button class="xb" data-a="sc" data-m="d4">Deload every 4th</button><button class="xb" data-a="sc" data-m="tl">Test in last week</button><button class="xb" data-a="sc" data-m="dt">Deload, then test</button><button class="xb" data-a="sc" data-m="clr">Clear</button></div></section>
+<section class="card"><h2>Deload settings</h2><div class="g"><label class="f">% lighter<input data-gd="w" inputmode="numeric" value="${dl.w}"></label><label class="f">% of sets<input data-gd="s" inputmode="numeric" value="${dl.s}"></label></div></section>
+<section class="card"><h2>Max-test lifts</h2><div class="mut">Tested on test weeks: warm-ups toward your estimated max, then two max attempts. Other lifts stay normal.</div>${tl}</section>
+<section class="card"><h2>Rep waves</h2><div class="mut">A repeating pattern that shifts each exercise's goal reps week to week. The weight adjusts automatically: fewer reps means heavier. Deload weeks pause the pattern.</div>
+<div class="row" style="gap:6px;flex-wrap:wrap;margin-top:8px">${WPRE.map((q,i)=>`<button class="xb" data-a="wp" data-i="${i}">${q[0]}</button>`).join("")}</div>
+${wv?`<div class="slots">${slots}</div><div class="mut" style="margin-top:6px">A goal of 8 reps becomes: ${ex8}</div><div class="row" style="gap:6px;margin-top:8px"><button class="xb" data-a="gwa">Add week</button><button class="xb" data-a="gwr">Remove last</button><button class="xb" data-a="gwo">Turn off waves</button></div>`:`<div class="mut" style="margin-top:6px">Waves are off.</div>`}</section>`;
+}
+function testOffer(){
+  const pk=S.week-1;if(pk<=(S.wo||0)||wtype(pk)!=="t"||wtype(S.week)==="t"||S.nwd===S.week)return[];
+  const items=[];
+  exs().forEach(e=>{if(!e.tl||isT(e)||(e.nw&&e.nw.wk===S.week))return;
+    const L=S.logs[pk]&&S.logs[pk][e.id];if(!L)return;
+    const cur=S.logs[S.week]&&S.logs[S.week][e.id];if(cur&&cur.some(s=>s.d))return;
+    const b=L.filter(s=>s.d&&s.rp!==1&&s.w>0&&s.r>0&&s.r<=10);if(!b.length)return;
+    const m=Math.max(...b.map(s=>s.w*(1+s.r/30))),G=gW(e,S.week),nw=rnd(m/(1+(G+R())/30),inc(e)),now=work(e,S.week);
+    if(nw>0&&Math.abs(nw-now)>=Math.max(inc(e),.5))items.push({e,m,nw,now})});
+  return items;
+}
 function train(){
   const days=S.p.days,all=days.length&&days.every((d,i)=>DS(i).done),last=PW()>=S.p.weeks;
   const cards=days.map((d,i)=>{const s=DS(i),L=d.ex.flatMap(e=>ens(S.week,e)),n=L.filter(x=>x.d).length;
     const st=s.done?"Completed"+(s.s&&s.e?" · "+mins(s)+" min":""):n?`In progress · ${n}/${L.length} sets`:"Not started";
     return `<button class="card day${s.done?" ok":""}" data-a="open" data-i="${i}"><div class="row sp"><h2>${esc(d.name)}</h2><span>${s.done?"✓":"›"}</span></div><div class="mut">${st} · ${d.ex.length} exercises</div></button>`}).join("");
-  return `<div class="row sp"><div><h1>Lionheart Lifting</h1><div class="mut">Week ${PW()} of ${S.p.weeks} · <span id="sy">${syncText()}</span></div></div></div>
+  return `<div class="row sp"><div><h1>Lionheart Lifting</h1><div class="mut">Week ${PW()} of ${S.p.weeks}${wtype(S.week)==="d"?" · Deload":wtype(S.week)==="t"?" · Test week":""} · <span id="sy">${syncText()}</span></div></div></div>${banner()}
 <div style="margin-top:12px">${cards||'<section class="card"><div class="mut">No days yet. Open Settings to add some.</div></section>'}</div>
 <button class="${all?"pri":""}" style="width:100%" data-a="next" ${last?"disabled":""}>${last?"Block complete":V.ask==="next"?(all?"":"Some days aren’t complete. ")+"Tap again to start week "+(PW()+1):all?"All days done · Start next week":"Start next week"}</button><div class="mut" style="margin-top:8px;text-align:center">${V.msg||(Object.keys(S.logs).length&&(!S.bk||Date.now()-S.bk>6048e5)?"Tip: it’s been a while since your last backup (Settings → Backup).":"")}</div>`;
+}
+function banner(){
+  const ty=wtype(S.week);let h="";
+  if(ty==="d")h=`<section class="card note"><b>Deload week</b><div class="mut">Weights about ${dlv().w}% lighter and about ${dlv().s}% of the sets. Your normal progression resumes next week.</div></section>`;
+  else if(ty==="t"){const n=exs().filter(e=>e.tl&&!isT(e)).map(e=>e.name);h=`<section class="card note"><b>Test week</b><div class="mut">${n.length?"Work up to a max single on: "+esc(n.join(", "))+". Other lifts are normal.":"No lifts are marked for max testing. Mark them in Settings → Current plan."}</div></section>`}
+  const it=testOffer();
+  if(it.length)h+=`<section class="card note"><b>New max</b>${it.map(x=>`<div class="row sp" style="margin-top:6px"><span>${esc(x.e.name)}</span><span class="mut">${fmt(x.m)} lb est. max → ${fmt(x.nw)} lb working (now ${fmt(x.now)})</span></div>`).join("")}<div class="row" style="gap:8px;margin-top:8px"><button class="xb" style="flex:1" data-a="td">Not now</button><button class="xb" style="flex:1" data-a="tu">Update weights</button></div></section>`;
+  return h?`<div style="margin-top:12px">${h}</div>`:"";
 }
 const fmtT=ms=>{const t=Math.floor(ms/1e3),h=Math.floor(t/3600),m=Math.floor(t%3600/60),s=t%60;return(h?h+":"+String(m).padStart(2,"0"):m)+":"+String(s).padStart(2,"0")};
 function ssTag(ex,j){let a=j,b=j;while(a>0&&ex[a-1].ss)a--;while(b<ex.length-1&&ex[b].ss)b++;return a===b?"":"Superset "+(j-a+1)+" of "+(b-a+1)}
@@ -185,7 +250,7 @@ function setup(){
   const eqc=`<section class="card"><h2>Equipment increments</h2><div class="mut">Weights in lb. Timed is in seconds.</div>${eqs.map(q=>`<div class="g" style="grid-template-columns:1fr 90px 44px"><input data-q="${esc(q)}" data-a2="eqn" value="${esc(q)}" ${q==="Timed"?"disabled":""}><input data-q="${esc(q)}" data-a2="eqv" inputmode="decimal" value="${p.eq[q]}"><button data-a="deq" data-q="${esc(q)}" ${q==="Timed"?"disabled":""}>✕</button></div>`).join("")}<button style="margin-top:8px" data-a="aeq">Add equipment</button></section>`;
   const blk=`<section class="card"><h2>Block</h2>${f("Plan name","name",p.name||"My Plan")}<div class="g" style="margin-top:8px">${f("Weeks in block","weeks",p.weeks,1)}${f("Goal RIR","rir",R(),1)}${f("Plateau weeks","plat",p.plat||3,1)}</div>
 <div style="margin-top:8px" class="mut">Current week: <input style="width:70px;display:inline" data-p="__week" data-n="1" inputmode="numeric" value="${PW()}"></div></section>`;
-  const plan=blk+p.days.map((d,di)=>`<section class="card"><div class="row sp">${f("Day name",`days.${di}.name`,d.name)}<button data-a="dday" data-i="${di}">${V.ask==="d"+di?"Tap again to remove":"Remove day"}</button></div>
+  const plan=blk+`<div class="mut" style="margin:14px 0 6px">Advanced (optional)</div>`+advBlock(p,"p")+`<div class="mut" style="margin:14px 0 6px">Days and exercises</div>`+p.days.map((d,di)=>`<section class="card"><div class="row sp">${f("Day name",`days.${di}.name`,d.name)}<button data-a="dday" data-i="${di}">${V.ask==="d"+di?"Tap again to remove":"Remove day"}</button></div>
 ${d.ex.map((e,ei)=>{const b=`days.${di}.ex.${ei}.`;return `<div class="card" style="background:var(--bg)">${f("Exercise",b+"name",e.name)}<div class="g"><label class="f">Equipment<select data-p="${b}eq">${eqs.map(q=>`<option ${q==e.eq?"selected":""}>${esc(q)}</option>`).join("")}</select></label>
 ${f("Sets",b+"sets",e.sets,1)}${f("Start weight (0 = enter as you lift)",b+"start",e.start,1)}${f(isT(e)?"Goal (sec)":"Goal reps",b+"goal",e.goal,1)}</div>
 ${isT(e)?"":`<label class="f" style="margin-top:8px">Ramp % (blank = none, e.g. 50, 80)<input data-p="${b}ramp" data-r="1" value="${e.ramp.map(x=>Math.round(x*100)).join(", ")}"></label>`}
@@ -287,8 +352,8 @@ function uniqueName(n){
 }
 function closeOut(){
   const wo=S.wo||0;
-  S.pl.push({n:S.p.name||"My Plan",days:JSON.parse(JSON.stringify(S.p.days)),weeks:S.p.weeks,from:wo+1,to:S.week,st:S.p.st||null,t:Date.now()});
-  S.p.days=[{name:"Day 1",ex:[]}];S.p.name="My Plan";delete S.p.st;
+  S.pl.push({n:S.p.name||"My Plan",days:JSON.parse(JSON.stringify(S.p.days)),weeks:S.p.weeks,from:wo+1,to:S.week,st:S.p.st||null,t:Date.now(),wt:S.p.wt||null,wv:S.p.wv||null,dl:S.p.dl||null});
+  S.p.days=[{name:"Day 1",ex:[]}];S.p.name="My Plan";delete S.p.st;delete S.p.wt;delete S.p.wv;delete S.p.dl;
   S.wo=S.week;S.week++;S.day=0;V.open={};V.wz=null;V.view="start";
 }
 function histPage(){
@@ -380,34 +445,36 @@ ${V.cf?cxForm():`<button class="xb" style="width:100%;margin-top:10px" data-a="c
 <div class="chips">${gl.map(x=>`<button class="${x===g?"sel":""}" data-a="lg" data-g="${esc(x)}">${esc(x)}</button>`).join("")}</div>
 <div id="ll" style="margin-top:8px">${libList()}</div>`;
 }
-const PLANS=[{"n":"Full body","d":"3 days a week. Every day trains the whole body. A classic, simple plan.","days":[{"n":"Full Body A","ex":[["Back Squat",3,6],["Bench Press",3,8],["Barbell Row",3,8],["Overhead Press",3,8],["Romanian Deadlift",3,8],["Plank",3,45]]},{"n":"Full Body B","ex":[["Leg Press",3,10],["Incline Dumbbell Press",3,10],["Lat Pulldown",3,10],["Lateral Raise",3,12],["Seated Leg Curl",3,10],["Dumbbell Curl",3,10]]},{"n":"Full Body C","ex":[["Conventional Deadlift",3,5],["Dumbbell Bench Press",3,10],["Pull-Up",3,8],["Dumbbell Shoulder Press",3,10],["Goblet Squat",3,10],["Hanging Leg Raise",3,10]]}]},{"n":"Upper / Lower","d":"4 days a week. Two upper-body days and two lower-body days.","days":[{"n":"Upper 1","ex":[["Bench Press",4,6],["Barbell Row",4,8],["Overhead Press",3,8],["Lat Pulldown",3,10],["Triceps Pushdown",3,10],["Dumbbell Curl",3,10]]},{"n":"Lower 1","ex":[["Back Squat",4,6],["Romanian Deadlift",3,8],["Leg Press",3,10],["Seated Leg Curl",3,10],["Standing Calf Raise",3,12],["Plank",3,45]]},{"n":"Upper 2","ex":[["Incline Dumbbell Press",4,8],["Seated Cable Row",4,10],["Dumbbell Shoulder Press",3,10],["Pull-Up",3,8],["Lateral Raise",3,12],["Hammer Curl",3,10],["Rope Pushdown",3,12]]},{"n":"Lower 2","ex":[["Conventional Deadlift",3,5],["Front Squat",3,8],["Walking Lunge",3,10],["Leg Extension",3,12],["Seated Calf Raise",3,12],["Hanging Leg Raise",3,10]]}]},{"n":"Push / Pull / Legs","d":"3 days a week. Push, pull and legs, each trained once. Run it twice a week for 6 days by adding days later.","days":[{"n":"Push","ex":[["Bench Press",4,6],["Overhead Press",3,8],["Incline Dumbbell Press",3,10],["Lateral Raise",3,12],["Triceps Pushdown",3,10],["Overhead Triceps Extension",3,12]]},{"n":"Pull","ex":[["Barbell Row",4,8],["Pull-Up",3,8],["Seated Cable Row",3,10],["Face Pull",3,12],["Barbell Curl",3,10],["Hammer Curl",3,10]]},{"n":"Legs","ex":[["Back Squat",4,6],["Romanian Deadlift",3,8],["Leg Press",3,10],["Seated Leg Curl",3,10],["Standing Calf Raise",4,12],["Cable Crunch",3,12]]}]},{"n":"Body-part split","d":"5 days a week. Chest, back, shoulders, arms and legs each get their own day.","days":[{"n":"Chest","ex":[["Bench Press",4,6],["Incline Dumbbell Press",3,10],["Cable Fly",3,12],["Chest Dip",3,10],["Pec Deck",3,12]]},{"n":"Back","ex":[["Conventional Deadlift",3,5],["Barbell Row",4,8],["Lat Pulldown",3,10],["Seated Cable Row",3,10],["Face Pull",3,12]]},{"n":"Shoulders","ex":[["Overhead Press",4,6],["Lateral Raise",4,12],["Rear Delt Fly",3,12],["Upright Row",3,10],["Barbell Shrug",3,10]]},{"n":"Arms","ex":[["Barbell Curl",3,10],["Skull Crusher",3,10],["Hammer Curl",3,10],["Triceps Pushdown",3,12],["Incline Dumbbell Curl",3,12],["Overhead Cable Triceps Extension",3,12]]},{"n":"Legs","ex":[["Back Squat",4,6],["Leg Press",3,10],["Romanian Deadlift",3,8],["Leg Extension",3,12],["Seated Leg Curl",3,12],["Standing Calf Raise",4,12]]}]}];
+const PLANS=[{"n":"Full body","d":"3 days a week. Every day trains the whole body. A classic, simple plan.","days":[{"n":"Full Body A","ex":[["Back Squat",3,6],["Bench Press",3,8],["Barbell Row",3,8],["Overhead Press",3,8],["Romanian Deadlift",3,8],["Plank",3,45]]},{"n":"Full Body B","ex":[["Leg Press",3,10],["Incline Dumbbell Press",3,10],["Lat Pulldown",3,10],["Lateral Raise",3,12],["Seated Leg Curl",3,10],["Dumbbell Curl",3,10]]},{"n":"Full Body C","ex":[["Conventional Deadlift",3,5],["Dumbbell Bench Press",3,10],["Pull-Up",3,8],["Dumbbell Shoulder Press",3,10],["Goblet Squat",3,10],["Hanging Leg Raise",3,10]]}]},{"n":"Upper / Lower","d":"4 days a week. Two upper-body days and two lower-body days.","days":[{"n":"Upper 1","ex":[["Bench Press",4,6],["Barbell Row",4,8],["Overhead Press",3,8],["Lat Pulldown",3,10],["Triceps Pushdown",3,10],["Dumbbell Curl",3,10]]},{"n":"Lower 1","ex":[["Back Squat",4,6],["Romanian Deadlift",3,8],["Leg Press",3,10],["Seated Leg Curl",3,10],["Standing Calf Raise",3,12],["Plank",3,45]]},{"n":"Upper 2","ex":[["Incline Dumbbell Press",4,8],["Seated Cable Row",4,10],["Dumbbell Shoulder Press",3,10],["Pull-Up",3,8],["Lateral Raise",3,12],["Hammer Curl",3,10],["Rope Pushdown",3,12]]},{"n":"Lower 2","ex":[["Conventional Deadlift",3,5],["Front Squat",3,8],["Walking Lunge",3,10],["Leg Extension",3,12],["Seated Calf Raise",3,12],["Hanging Leg Raise",3,10]]}]},{"n":"Push / Pull / Legs","d":"3 days a week. Push, pull and legs, each trained once. Run it twice a week for 6 days by adding days later.","days":[{"n":"Push","ex":[["Bench Press",4,6],["Overhead Press",3,8],["Incline Dumbbell Press",3,10],["Lateral Raise",3,12],["Triceps Pushdown",3,10],["Overhead Triceps Extension",3,12]]},{"n":"Pull","ex":[["Barbell Row",4,8],["Pull-Up",3,8],["Seated Cable Row",3,10],["Face Pull",3,12],["Barbell Curl",3,10],["Hammer Curl",3,10]]},{"n":"Legs","ex":[["Back Squat",4,6],["Romanian Deadlift",3,8],["Leg Press",3,10],["Seated Leg Curl",3,10],["Standing Calf Raise",4,12],["Cable Crunch",3,12]]}]},{"n":"Body-part split","d":"5 days a week. Chest, back, shoulders, arms and legs each get their own day.","days":[{"n":"Chest","ex":[["Bench Press",4,6],["Incline Dumbbell Press",3,10],["Cable Fly",3,12],["Chest Dip",3,10],["Pec Deck",3,12]]},{"n":"Back","ex":[["Conventional Deadlift",3,5],["Barbell Row",4,8],["Lat Pulldown",3,10],["Seated Cable Row",3,10],["Face Pull",3,12]]},{"n":"Shoulders","ex":[["Overhead Press",4,6],["Lateral Raise",4,12],["Rear Delt Fly",3,12],["Upright Row",3,10],["Barbell Shrug",3,10]]},{"n":"Arms","ex":[["Barbell Curl",3,10],["Skull Crusher",3,10],["Hammer Curl",3,10],["Triceps Pushdown",3,12],["Incline Dumbbell Curl",3,12],["Overhead Cable Triceps Extension",3,12]]},{"n":"Legs","ex":[["Back Squat",4,6],["Leg Press",3,10],["Romanian Deadlift",3,8],["Leg Extension",3,12],["Seated Leg Curl",3,12],["Standing Calf Raise",4,12]]}]},{"n":"Big three 1RM builder","adv":1,"weeks":12,"wt":{"5":"d","6":"t","11":"d","12":"t"},"d":"4 days a week, 12 weeks. Builds your squat, bench and deadlift with low-rep work. A deload then a max test in weeks 6 and 12.","days":[{"n":"Squat","ex":[["Back Squat",5,5,1],["Romanian Deadlift",3,8],["Leg Press",3,10],["Standing Calf Raise",3,12],["Plank",3,45]]},{"n":"Bench","ex":[["Bench Press",5,5,1],["Incline Dumbbell Press",3,8],["Barbell Row",4,8],["Triceps Pushdown",3,10]]},{"n":"Deadlift","ex":[["Conventional Deadlift",4,3,1],["Front Squat",3,6],["Lat Pulldown",3,10],["Hanging Leg Raise",3,10]]},{"n":"Press and back","ex":[["Overhead Press",4,6],["Pull-Up",4,6],["Dumbbell Bench Press",3,8],["Seated Cable Row",3,10],["Dumbbell Curl",3,10],["Face Pull",3,12]]}]},{"n":"5-day with deloads","adv":1,"weeks":12,"wt":{"4":"d","8":"d","12":"d"},"d":"5 days a week, 12 weeks. Push, pull, legs, then upper and lower. A lighter deload week every 4th week.","days":[{"n":"Push","ex":[["Bench Press",4,6],["Overhead Press",3,8],["Incline Dumbbell Press",3,10],["Lateral Raise",3,12],["Triceps Pushdown",3,10]]},{"n":"Pull","ex":[["Barbell Row",4,8],["Pull-Up",3,8],["Seated Cable Row",3,10],["Face Pull",3,12],["Barbell Curl",3,10]]},{"n":"Legs","ex":[["Back Squat",4,6],["Romanian Deadlift",3,8],["Leg Press",3,10],["Seated Leg Curl",3,10],["Standing Calf Raise",4,12]]},{"n":"Upper","ex":[["Incline Dumbbell Press",3,8],["Lat Pulldown",3,10],["Dumbbell Shoulder Press",3,10],["Hammer Curl",3,10],["Rope Pushdown",3,12]]},{"n":"Lower","ex":[["Conventional Deadlift",3,5],["Front Squat",3,8],["Walking Lunge",3,10],["Leg Extension",3,12],["Hanging Leg Raise",3,10]]}]}];
 const nid=()=>"x"+Date.now()+"_"+(nid.c=(nid.c||0)+1);
-function newWiz(){return{step:1,n:3,days:[1,2,3].map(k=>({name:"Day "+k,ex:[]})),weeks:12,rir:2,name:"My Plan"}}
+function newWiz(){return{step:0,adv:false,wt:{},wv:null,dl:{w:10,s:50},n:3,days:[1,2,3].map(k=>({name:"Day "+k,ex:[]})),weeks:12,rir:2,name:"My Plan"}}
 function startPage(){
   const c=(a,h,s)=>`<button class="card day" data-a="${a}"><div class="row sp"><div><h2>${h}</h2><div class="mut">${s}</div></div><span>›</span></div></button>`;
   return `<h1>Set up your training</h1><div class="mut" style="margin-bottom:12px">Choose how you'd like to begin.</div>
 ${c("s-new","Build from scratch","Answer a few questions and pick your own exercises.")}${c("s-pre","Pick a pre-built plan","Start from a ready-made layout, then change anything.")}${S.pl&&S.pl.length?c("s-past","Reuse a past plan","Start again from a plan you finished, at the weights you ended on."):""}${c("s-rest","Restore from backup","Paste a backup you saved earlier.")}${SBON&&U?`<div class="mut" style="margin-top:14px;text-align:center">Signed in as ${esc(UE)} · <button class="lnk" data-a="so">${V.ask==="so"?"Tap again to sign out":"Sign out"}</button></div>`:""}`;
 }
 function restPage(){return `<div class="row sp"><button data-a="s-back">‹ Back</button></div><h1 style="margin-top:8px">Restore from backup</h1><section class="card"><div class="mut">Paste the backup text you saved from another phone or an earlier session, then tap Restore.</div><textarea id="bk" rows="6" style="margin-top:8px"></textarea><button class="pri" style="width:100%;margin-top:8px" data-a="imp">Restore from text</button><div class="mut" id="bm"></div></section>`}
-function prePage(){return `<div class="row sp"><button data-a="s-back">‹ Back</button></div><h1 style="margin-top:8px">Pick a plan</h1><div class="mut" style="margin-bottom:10px">You can change anything after you choose.</div>`+PLANS.map((q,i)=>`<button class="card day" data-a="pp" data-i="${i}"><div class="row sp"><div><h2>${esc(q.n)}</h2><div class="mut">${q.days.length} days a week</div><div class="mut">${esc(q.d)}</div></div><span>›</span></div></button>`).join("")}
+function prePage(){return `<div class="row sp"><button data-a="s-back">‹ Back</button></div><h1 style="margin-top:8px">Pick a plan</h1><div class="mut" style="margin-bottom:10px">You can change anything after you choose.</div>`+PLANS.map((q,i)=>`<button class="card day" data-a="pp" data-i="${i}"><div class="row sp"><div><h2>${esc(q.n)}</h2><div class="mut">${q.days.length} days a week${q.adv?" · Advanced":""}</div><div class="mut">${esc(q.d)}</div></div><span>›</span></div></button>`).join("")}
 function prevPage(){
   const q=PLANS[V.pv];if(!q){V.view="pre";return prePage()}
-  return `<div class="row sp"><button data-a="s-pre">‹ Plans</button></div><h1 style="margin-top:8px">${esc(q.n)}</h1><div class="mut" style="margin-bottom:10px">${esc(q.d)}</div>`+q.days.map(d=>`<section class="card"><h2>${esc(d.n)}</h2>${d.ex.map(e=>`<div class="row sp" style="margin-top:6px"><span>${esc(e[0])}</span><span class="mut">${e[1]} × ${LIB.find(l=>l[0]===e[0])[2]==="Timed"?"45 sec":e[2]}</span></div>`).join("")}</section>`).join("")+`<div class="mut" style="margin-bottom:10px">Weights start blank. Enter what you lift in week 1 and the app takes it from there.</div><button class="pri" style="width:100%;margin-bottom:12px" data-a="pu">Use this plan</button>`;
+  return `<div class="row sp"><button data-a="s-pre">‹ Plans</button></div><h1 style="margin-top:8px">${esc(q.n)}</h1><div class="mut" style="margin-bottom:10px">${esc(q.d)}</div>`+q.days.map(d=>`<section class="card"><h2>${esc(d.n)}</h2>${d.ex.map(e=>`<div class="row sp" style="margin-top:6px"><span>${esc(e[0])}</span><span class="mut">${e[1]} × ${LIB.find(l=>l[0]===e[0])[2]==="Timed"?"45 sec":e[2]}</span></div>`).join("")}</section>`).join("")+(q.adv?`<div class="mut" style="margin-bottom:10px">Advanced plan: ${Object.entries(q.wt||{}).map(([k,v])=>"week "+k+" "+(v==="d"?"deload":"max test")).join(", ")}. You can change this in Settings.</div>`:"")+`<div class="mut" style="margin-bottom:10px">Weights start blank. Enter what you lift in week 1 and the app takes it from there.</div><button class="pri" style="width:100%;margin-bottom:12px" data-a="pu">Use this plan</button>`;
 }
 function wizPage(){
   const w=V.wz;if(!w){V.view="start";return startPage()}
   const st=w.step,eqs=Object.keys(S.p.eq);
-  const head=`<div class="row sp"><button data-a="wback">‹ Back</button><div class="mut">Step ${st} of 4</div></div><div class="pg"><i style="width:${st*25}%"></i></div>`;
+  const TOT=w.adv?5:4,head=st===0?`<div class="row sp"><button data-a="wback">‹ Back</button></div>`:`<div class="row sp"><button data-a="wback">‹ Back</button><div class="mut">Step ${st} of ${TOT}</div></div><div class="pg"><i style="width:${st*100/TOT}%"></i></div>`;
   const f=(lab,path,val,n)=>`<label class="f">${lab}<input data-w="${path}" ${n?'data-n="1" inputmode="decimal"':""} value="${esc(val)}"></label>`;
   const next=(lab)=>`<div class="mut" style="margin:6px 0">${esc(V.wmsg||"")}</div><button class="pri" style="width:100%;margin:6px 0 12px" data-a="${lab[0]}">${lab[1]}</button>`;
+  if(st===0)return head+`<h1 style="margin-top:8px">How detailed do you want to be?</h1><div class="mut" style="margin-bottom:10px">You can change all of this later in Settings.</div><button class="card day" data-a="wmode" data-m="b"><div class="row sp"><div><h2>Basic</h2><div class="mut">Days, exercises, goals and starting weights.</div></div><span>›</span></div></button><button class="card day" data-a="wmode" data-m="a"><div class="row sp"><div><h2>Advanced</h2><div class="mut">Everything in Basic, plus deload weeks, 1-rep-max test weeks and rep waves.</div></div><span>›</span></div></button>`;
   if(st===1)return head+`<h1>How many days a week?</h1><div class="mut">Pick the days you plan to train, then name them.</div><div class="chips" style="margin:10px 0">${[1,2,3,4,5,6,7].map(n=>`<button class="${n===w.n?"sel":""}" data-a="wn" data-i="${n}">${n}</button>`).join("")}</div>${w.days.map((d,i)=>`<section class="card">${f("Day "+(i+1)+" name",`days.${i}.name`,d.name)}</section>`).join("")}`+next(["wnext","Next"]);
   if(st===2)return head+`<h1>Choose your exercises</h1><div class="mut">Add exercises to each day from the library, or make your own.</div>`+w.days.map((d,i)=>`<section class="card"><h2>${esc(d.name)}</h2>${d.ex.map((e,j)=>`<div class="row sp" style="margin-top:8px">${e.c?`<input style="flex:1" data-w="days.${i}.ex.${j}.name" value="${esc(e.name)}">`:`<span>${esc(e.name)} <span class="mut">· ${esc(e.eq)}</span></span>`}<button data-a="wrx" data-i="${i}" data-j="${j}" aria-label="Remove">✕</button></div>`).join("")}<button class="xb" style="width:100%;margin-top:10px" data-a="wlib" data-i="${i}">Add exercise</button></section>`).join("")+next(["wnext","Next"]);
   if(st===3)return head+`<h1>Set your goals</h1><div class="mut">Choose sets and goal reps for each movement. If you don't know your starting weight yet, leave it at 0 and enter it as you lift.</div>`+w.days.map((d,i)=>d.ex.length?`<h2 style="margin:14px 0 6px">${esc(d.name)}</h2>`+d.ex.map((e,j)=>{const b=`days.${i}.ex.${j}.`,tm=e.eq==="Timed";return `<section class="card"><h2>${esc(e.name)}</h2><div class="g"><label class="f">Equipment<select data-w="${b}eq">${eqs.map(q=>`<option ${q===e.eq?"selected":""}>${esc(q)}</option>`).join("")}</select></label>${f("Sets",b+"sets",e.sets,1)}${f(tm?"Goal (sec)":"Goal reps",b+"goal",e.goal,1)}${tm?"":f("Start weight",b+"start",e.start,1)}</div></section>`}).join(""):"").join("")+next(["wnext","Next"]);
-  return head+`<h1>Last details</h1>${f("Plan name","name",w.name)}<div class="g" style="margin-top:10px">${f("Weeks in block","weeks",w.weeks,1)}${f("Goal RIR","rir",w.rir,1)}</div><section class="card" style="margin-top:12px"><h2>What's RIR?</h2><div class="mut">Reps in reserve: how many more reps you could have done. A goal RIR of 2 means you stop each set with about 2 reps left. The app uses it to set your next week's weights.</div></section>`+next(["wdone","Create my plan"]);
+  if(st===5)return head+`<h1>Advanced options</h1><div class="mut" style="margin-bottom:10px">All optional. Skip anything you don't need.</div>${advBlock(w,"w")}`+next(["wdone","Create my plan"]);
+  return head+`<h1>Last details</h1>${f("Plan name","name",w.name)}<div class="g" style="margin-top:10px">${f("Weeks in block","weeks",w.weeks,1)}${f("Goal RIR","rir",w.rir,1)}</div><section class="card" style="margin-top:12px"><h2>What's RIR?</h2><div class="mut">Reps in reserve: how many more reps you could have done. A goal RIR of 2 means you stop each set with about 2 reps left. The app uses it to set your next week's weights.</div></section>`+(w.adv?next(["wnext","Next"]):next(["wdone","Create my plan"]));
 }
 function commitDays(days){
   const eq=S.p.eq;days.forEach(d=>d.ex.forEach(e=>{if(!(e.eq in eq))eq[e.eq]=LDI[e.eq]??5}));
-  S.p.days=days.map(d=>({name:d.name||"Day",ex:d.ex.map(e=>({id:nid(),name:String(e.name||"").trim()||"Exercise",eq:e.eq,start:+e.start||0,goal:+e.goal||(e.eq==="Timed"?45:8),sets:Math.max(1,+e.sets||3),ramp:(e.ramp||[]).slice()}))}));S.p.st=Date.now();
+  S.p.days=days.map(d=>({name:d.name||"Day",ex:d.ex.map(e=>({id:nid(),name:String(e.name||"").trim()||"Exercise",eq:e.eq,start:+e.start||0,goal:+e.goal||(e.eq==="Timed"?45:8),sets:Math.max(1,+e.sets||3),ramp:(e.ramp||[]).slice(),...(e.tl?{tl:1}:{})}))}));S.p.st=Date.now();
   if(!Object.keys(S.logs).length){S.week=1;S.day=0}V.open={};
 }
 function addX(l){const d=PD()[V.pd];if(!d)return;if(!(l[2] in S.p.eq))S.p.eq[l[2]]=LDI[l[2]]??5;const tm=l[2]==="Timed";
@@ -430,8 +497,9 @@ document.addEventListener("change",ev=>{
   const t=ev.target;
   if(t.dataset.k){const row=t.closest(".set"),e=exs().find(x=>x.id===row.dataset.e),s=ens(S.week,e)[+row.dataset.i];
     s[t.dataset.k]=t.value===""?null:+t.value;save();return}
+  if(t.dataset.gd){const o=tgt();o.dl=Object.assign({w:10,s:50},o.dl);o.dl[t.dataset.gd]=Math.max(t.dataset.gd==="s"?1:0,Math.min(100,Math.round(+t.value)||0));if(o===S.p)resetUnlogged();return}
   if(t.dataset.cf){V.cf[t.dataset.cf]=t.value;if(t.tagName!=="INPUT")render();return}
-  if(t.dataset.w){let v=t.value;if(t.dataset.n)v=+v||0;setPath(V.wz,t.dataset.w,v);
+  if(t.dataset.w){let v=t.value;if(t.dataset.c)v=t.checked?1:0;else if(t.dataset.n)v=+v||0;setPath(V.wz,t.dataset.w,v);
     if(/\.eq$/.test(t.dataset.w)&&v==="Timed"){const k=t.dataset.w.replace(/eq$/,"");setPath(V.wz,k+"goal",45);setPath(V.wz,k+"start",0)}
     if(t.tagName!=="INPUT")render();return}
   if(t.dataset.a2){const q=t.dataset.q,eq=S.p.eq;
@@ -441,6 +509,7 @@ document.addEventListener("change",ev=>{
   if(t.dataset.p){const p=t.dataset.p;let v=t.value;
     if(t.dataset.c)v=t.checked?1:0;else if(t.dataset.r)v=v.split(/[ ,]+/).filter(Boolean).map(x=>+x/100).filter(x=>x>0);
     else if(t.dataset.n)v=+v||0;
+    if(/\.tl$/.test(p))resetUnlogged();
     if(p==="__week")S.week=(S.wo||0)+Math.max(1,Math.min(S.p.weeks,v||1));else setPath(S.p,p,v);
     render()}
 });
@@ -485,21 +554,36 @@ document.addEventListener("click",ev=>{
   else if(a==="s-past"){V.view="pastl";scrollTo(0,0)}
   else if(a==="close"){if(V.ask!=="close")V.ask="close";else{V.ask=null;closeOut();scrollTo(0,0)}}
   else if(a==="ru"){const pl=S.pl[V.pi];if(pl){if(exs().length&&V.ask!=="ru")V.ask="ru";else{V.ask=null;if(exs().length)closeOut();
-    const nm=uniqueName(pl.n);commitDays(pl.days.map(d=>({name:d.name,ex:d.ex.map(e=>{const v=lastVals(pl,e);return{name:e.name,eq:e.eq,start:v.start,goal:v.goal,sets:e.sets,ramp:e.ramp}})})));
-    S.p.name=nm;S.p.weeks=pl.weeks;V.view="setup";V.st="plan";scrollTo(0,0)}}}
+    const nm=uniqueName(pl.n);commitDays(pl.days.map(d=>({name:d.name,ex:d.ex.map(e=>{const v=lastVals(pl,e);return{name:e.name,eq:e.eq,start:v.start,goal:v.goal,sets:e.sets,ramp:e.ramp,tl:e.tl}})})));
+    S.p.name=nm;S.p.weeks=pl.weeks;if(pl.wt)S.p.wt=Object.assign({},pl.wt);if(pl.wv)S.p.wv=pl.wv.slice();if(pl.dl)S.p.dl=Object.assign({},pl.dl);V.view="setup";V.st="plan";scrollTo(0,0)}}}
+  else if(a==="wk"){const o=tgt();o.wt=o.wt||{};const w=i,c=o.wt[w]||"n",nx=c==="n"?"d":c==="d"?"t":"n";if(nx==="n")delete o.wt[w];else o.wt[w]=nx;if(o===S.p)resetUnlogged()}
+  else if(a==="sc"){const o=tgt(),n=Math.max(1,+o.weeks||12),m=b.dataset.m;o.wt=o.wt||{};
+    if(m==="d4"){for(let w=1;w<=n;w++)if(o.wt[w]==="d")delete o.wt[w];for(let w=4;w<=n;w+=4)o.wt[w]="d"}
+    else if(m==="tl")o.wt[n]="t";
+    else if(m==="dt"){o.wt[n]="t";if(n>=2)o.wt[n-1]="d"}
+    else o.wt={};
+    if(o===S.p)resetUnlogged()}
+  else if(a==="wp"){const o=tgt();o.wv=WPRE[i][1].slice();if(o===S.p)resetUnlogged()}
+  else if(a==="gwd"||a==="gwu"){const o=tgt();if(o.wv){o.wv[i]=Math.max(-8,Math.min(8,o.wv[i]+(a==="gwu"?1:-1)));if(o===S.p)resetUnlogged()}}
+  else if(a==="gwa"){const o=tgt();if(o.wv&&o.wv.length<8)o.wv.push(0);if(o===S.p)resetUnlogged()}
+  else if(a==="gwr"){const o=tgt();if(o.wv){o.wv.pop();if(!o.wv.length)o.wv=null}if(o===S.p)resetUnlogged()}
+  else if(a==="gwo"){const o=tgt();o.wv=null;if(o===S.p)resetUnlogged()}
+  else if(a==="tu"){testOffer().forEach(x=>{x.e.nw={wk:S.week,w:x.nw};if(S.logs[S.week])delete S.logs[S.week][x.e.id]});S.nwd=S.week}
+  else if(a==="td"){S.nwd=S.week}
   else if(a==="s-new"){V.wz=V.wz||newWiz();V.wmsg="";V.view="wiz";scrollTo(0,0)}
   else if(a==="s-pre"){V.view="pre";scrollTo(0,0)}
   else if(a==="s-rest"){V.view="rest";scrollTo(0,0)}
   else if(a==="s-back"){V.view="start";scrollTo(0,0)}
   else if(a==="pp"){V.pv=i;V.view="prev";scrollTo(0,0)}
-  else if(a==="pu"){const q=PLANS[V.pv];if(q){commitDays(q.days.map(d=>({name:d.n,ex:d.ex.map(e=>{const l=LIB.find(x=>x[0]===e[0]),tm=l[2]==="Timed";return{name:e[0],eq:l[2],start:0,goal:tm?45:e[2],sets:e[1]}})})));S.p.name=q.n;V.view="setup";V.st="plan";scrollTo(0,0)}}
+  else if(a==="pu"){const q=PLANS[V.pv];if(q){commitDays(q.days.map(d=>({name:d.n,ex:d.ex.map(e=>{const l=LIB.find(x=>x[0]===e[0]),tm=l[2]==="Timed";return{name:e[0],eq:l[2],start:0,goal:tm?45:e[2],sets:e[1],tl:e[3]}})})));S.p.name=q.n;if(q.weeks)S.p.weeks=q.weeks;if(q.wt)S.p.wt=Object.assign({},q.wt);else{delete S.p.wt;delete S.p.wv;delete S.p.dl}V.view="setup";V.st="plan";scrollTo(0,0)}}
   else if(a==="wn"){const w=V.wz;w.n=i;while(w.days.length<i)w.days.push({name:"Day "+(w.days.length+1),ex:[]});w.days.length=i}
-  else if(a==="wback"){const w=V.wz;V.wmsg="";if(w.step>1)w.step--;else{V.wz=null;V.view="start"}scrollTo(0,0)}
+  else if(a==="wback"){const w=V.wz;V.wmsg="";if(w.step>0)w.step--;else{V.wz=null;V.view="start"}scrollTo(0,0)}
+  else if(a==="wmode"){V.wz.adv=b.dataset.m==="a";V.wz.step=1;scrollTo(0,0)}
   else if(a==="wnext"){const w=V.wz;V.wmsg="";if(w.step===2&&!w.days.some(d=>d.ex.length)){V.wmsg="Add at least one exercise to continue."}else{w.step++;if(w.step===3)w.days=w.days}scrollTo(0,0)}
   else if(a==="wlib"){V.view="pick";V.pd=i;V.q="";V.lg="All";V.added=0;V.cf=null;scrollTo(0,0)}
   else if(a==="wcx"){V.wz.days[i].ex.push({name:"New exercise",eq:Object.keys(S.p.eq)[0],start:0,goal:8,sets:3,c:1})}
   else if(a==="wrx"){V.wz.days[i].ex.splice(+b.dataset.j,1)}
-  else if(a==="wdone"){const w=V.wz;commitDays(w.days.filter(d=>d.ex.length));S.p.weeks=Math.max(1,+w.weeks||12);S.p.rir=Math.max(0,+w.rir||0);S.p.name=w.name||"My Plan";V.wz=null;V.view="train";scrollTo(0,0)}
+  else if(a==="wdone"){const w=V.wz;commitDays(w.days.filter(d=>d.ex.length));S.p.weeks=Math.max(1,+w.weeks||12);S.p.rir=Math.max(0,+w.rir||0);S.p.name=w.name||"My Plan";if(w.adv){S.p.wt=Object.assign({},w.wt);S.p.wv=w.wv?w.wv.slice():null;S.p.dl=Object.assign({},w.dl)}else{delete S.p.wt;delete S.p.wv;delete S.p.dl}V.wz=null;V.view="train";scrollTo(0,0)}
   else if(a==="lib"){V.view="pick";V.pd=i;V.q="";V.lg="All";V.added=0;V.st="plan";V.cf=null;scrollTo(0,0)}
   else if(a==="lg"){V.lg=b.dataset.g}
   else if(a==="ldone"){V.view=V.wz?"wiz":"setup";scrollTo(0,0)}
