@@ -81,7 +81,7 @@ function fresh(){
   return s;
 }
 try{const x=localStorage.getItem("lh1");S=x?JSON.parse(x):fresh()}catch(e){S=fresh()}
-const VER="2.22";
+const VER="2.23";
 function migrate(s){const v=s.v||1;
   if(s.p&&s.p.eq&&s.p.eq.Timed==null)s.p.eq.Timed=s.p.timeInc||15;
   if(s.p&&s.p.eq&&s.p.eq.Carry==null)s.p.eq.Carry=10;
@@ -217,6 +217,10 @@ function gen(e,wk){
   const K=W>0,G=gW(e,wk),rr=dl?G:reps(e,wk,W);
   return e.ramp.map(p=>({pw:K?h(W*p):null,pr:G,d:0,rp:1})).concat(Array.from({length:setsFor(e,wk)},()=>({pw:K?W:null,pr:rr,d:0,rp:0,tr:R()})));
 }
+function nextAtt(e,L){
+  const st=inc(e),A=L.filter(s=>s.rp===0&&s.tr===0),dn=A.filter(s=>s.d&&s.w>0&&s.r>0),top=dn.length?Math.max(...dn.map(s=>+s.w)):Math.max(0,...A.map(s=>+s.pw||0));
+  if(!(top>0))return null;const x=st?rnd(top*1.025,st):h(top*1.025);return x>top?x:top+(st||2.5);
+}
 function ens(wk,e){
   const lg=S.logs[wk]=S.logs[wk]||{};const L=lg[e.id]=lg[e.id]||[];
   if(L.length<needN(e,wk)){const g=gen(e,wk);for(let i=L.length;i<g.length;i++)L.push(g[i])}
@@ -269,7 +273,7 @@ function why(e,wk){
     return{l:P(["Fresh start. Hold as long as you can with good form.","First time here. Hold it strong and steady.","New hold! Aim for good form over a long time.","Let's see what you've got. Hold with good form."]),d:"No earlier holds logged yet, so the target is your goal of "+F(e.goal)+" sec."};
   }
   if(isTest(e,wk)&&!(W0>0)&&!(meth(e)==="p"&&e.rm>0))return{l:P(["Max test to find your starting point. Work up by feel, then go for a heavy single.","Baseline test. Build up in small jumps, then find a solid single.","First max test. Warm up well and work up to a heavy single."]),d:"No weights are logged for this lift yet, so the work-up sets are blank. Do a few warm-up sets that get heavier with fewer reps, then two single attempts with good form. Next week tap Update weights and the app sets your working weight from your best single."};
-  if(isTest(e,wk))return{l:P(["Max test week. Warm up, then go for a big single. You've got this!","Test day. Build up smoothly, then show what you've got.","Time to find your max. Warm up well and trust your training.","Max week! All that work leads to this single.","Go for a big single. You've earned this one."]),d:"Your estimated max is about "+F(W0*(1+(e.goal+R())/30))+" lb, worked out from your normal working weight of "+F(W0)+" lb. Warm-ups climb toward it, then two attempts at about 100% and 102.5%."};
+  if(isTest(e,wk))return{l:P(["Max test week. Warm up, then go for a big single. You've got this!","Test day. Build up smoothly, then show what you've got.","Time to find your max. Warm up well and trust your training.","Max week! All that work leads to this single.","Go for a big single. You've earned this one."]),d:"Your estimated max is about "+F(W0*(1+(e.goal+R())/30))+" lb, worked out from your normal working weight of "+F(W0)+" lb. Warm-ups climb toward it, then two attempts at about 100% and 102.5%. If the last one moves well, tap + Add attempt to try something heavier."};
   if(wtype(wk)==="d")return{l:P(["Deload week: lighter on purpose, so you come back stronger.","Easy week on purpose. Recovery is part of the plan.","Deload time. Move well and let your body catch up.","Lighter week. This is where the gains settle in.","Take it easy. You'll come back stronger next week."]),d:"Weights are about "+dlv().w+"% lighter and sets about "+dlv().s+"% of normal. Next week your progression picks up from your normal weights, so nothing is lost."};
   if(e.nw&&e.nw.wk===wk)return{l:P(["New max locked in. Weight set from your test.","New max in the books. Your weight is updated.","Great test! Training weight now matches your new max.","Stronger than before. Weight set from your test."]),d:"You accepted the update after your max test, so this week's working weight is "+F(e.nw.w)+" lb."};
   const mm=meth(e);
@@ -344,6 +348,7 @@ function exCard(e,tag){
 <div class="mut">${isTest(e,S.week)?"Max test · work up to a max single":setsFor(e,S.week)+" sets · goal "+(t?e.goal+" sec":goalT(e,S.week))+(e.ramp.length&&!t?" · warm-up "+e.ramp.map(x=>Math.round(x*100)+"%").join(", "):"")}</div>${e.eq==="Dumbbell"?'<div class="mut" style="font-size:12px">Dumbbells: enter the total weight (two 25s = 50).</div>':""}
 ${(()=>{const y=why(e,S.week),o=V.wy&&V.wy[e.id];return `<button class="why" data-a="why" data-e="${e.id}"><span>${esc(y.l)}</span><i>${o?"▴":"▾"}</i></button>${o?`<div class="whyd">${esc(y.d)}</div>`:""}`})()}
 <div class="hd${t?" t":""}"><span></span>${t?"<span>seconds</span>":"<span>weight</span><span>reps</span><span>RIR</span>"}<span></span></div>${rows}
+${isTest(e,S.week)&&!DS(V.di).done?(()=>{const lx=L[L.length-1],nx=nextAtt(e,L);return `<div class="row" style="gap:8px;margin-top:10px"><button class="xb" style="flex:1" data-a="xatt" data-e="${e.id}">+ Add attempt${nx?" ("+fmt(nx)+" lb)":""}</button>${lx&&lx.x&&!lx.d?`<button class="xb" data-a="xatr" data-e="${e.id}">Remove</button>`:""}</div><div class="mut" style="font-size:12px;margin-top:4px">Felt strong? Add another single and go heavier. Your best single counts.</div>`})():""}
 ${open?`<div class="hist">${hist(e)}</div>`:""}</section>`;
 }
 const DS=i=>(S.ds[S.week+":"+i]=S.ds[S.week+":"+i]||{});
@@ -843,6 +848,8 @@ document.addEventListener("click",ev=>{
   else if(a==="ldone"){if(V.xm){V.xm=0;V.view="day"}else V.view=V.wz?"wiz":"setup";scrollTo(0,0)}
   else if(a==="xadd"){V.view="pick";V.xm=1;V.pd=V.di;V.q="";V.lg="All";V.added=0;V.cf=null;scrollTo(0,0)}
   else if(a==="xrm"){const ar=S.xd[xk(S.week,V.di)]||[],j=ar.findIndex(x=>x.id===b.dataset.e);if(j>=0){const id=ar[j].id,L=(S.logs[S.week]||{})[id],used=L&&L.some(q=>q.d);if(used&&V.ask!=="xrm"+id)V.ask="xrm"+id;else{V.ask=null;ar.splice(j,1);if(S.logs[S.week])delete S.logs[S.week][id]}}}
+  else if(a==="xatt"){const e=exById(b.dataset.e);if(e){const L=ens(S.week,e),nx=nextAtt(e,L);L.push({pw:nx,pr:1,d:0,rp:0,tr:0,x:1})}}
+  else if(a==="xatr"){const e=exById(b.dataset.e);if(e){const L=ens(S.week,e),lx=L[L.length-1];if(lx&&lx.x&&!lx.d)L.pop()}}
   else if(a==="pred"){V.view="pred";scrollTo(0,0)}
   else if(a==="tutp"){V.tback="prof";V.view="tut";scrollTo(0,0)}
   else if(a==="tutn"||a==="tutx"){const el=document.getElementById("tut");if(a==="tutn"&&el){const k=Math.round(el.scrollLeft/el.clientWidth);if(k<TUT.length-1){el.scrollTo({left:(k+1)*el.clientWidth,behavior:"smooth"});return}}S.tut=1;V.view=V.tback||"start";V.tback=null;scrollTo(0,0)}
